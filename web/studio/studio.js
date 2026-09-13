@@ -423,7 +423,13 @@ async function init() {
   new ResizeObserver(scheduleRender).observe($("canvas-wrap"));
   window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener?.("change", scheduleRender);
 
-  await loadMap(await (await fetch(SAMPLE.url)).arrayBuffer(), SAMPLE.name);
+  // The sample map is optional (release downloads leave it out to stay small).
+  const sample = await fetch(SAMPLE.url).catch(() => null);
+  if (sample?.ok) {
+    await loadMap(await sample.arrayBuffer(), SAMPLE.name);
+  } else {
+    $("map-info").textContent = "Open a .topo file (or drop one here) — make one with `topowall fetch`";
+  }
 
   // Test hooks: ?preset=<id>&interval=<m>&index=<n>&auto=1&output=<WxH>
   const q = new URLSearchParams(location.search);

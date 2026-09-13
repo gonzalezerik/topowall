@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu,  os: ubuntu-22.04,     archive: tar.gz }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm, archive: tar.gz }
+          - { target: aarch64-apple-darwin,      os: macos-latest,     archive: tar.gz }
+          - { target: x86_64-apple-darwin,       os: macos-latest,     archive: tar.gz }
+          - { target: x86_64-pc-windows-msvc,    os: windows-latest,   archive: zip }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked -p topowall --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          name="topowall-${GITHUB_REF_NAME}-${TARGET}"
+          mkdir -p "dist/$name"
+          bin=topowall
+          case "$TARGET" in *windows*) bin=topowall.exe ;; esac
+          cp "target/${TARGET}/release/$bin" "dist/$name/"
+          cp LICENSE "dist/$name/"
+          cp crates/render/palettes/LICENSE-tinted-theming "dist/$name/"
+          cd dist
+          if [ "$ARCHIVE" = zip ]; then
+            7z a -tzip "$name.zip" "$name" > /dev/null
+          else
+            tar czf "$name.tar.gz" "$name"
+          fi
+          rm -rf "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  studio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package the studio (code only, no sample map or images)
+        run: |
+          name="topowall-studio-${GITHUB_REF_NAME}"
+          mkdir -p "dist/$name/web/studio"
+          cp -r web/src "dist/$name/web/"
+          cp web/studio/index.html web/studio/studio.js web/studio/studio.css web/studio/presets.json "dist/$name/web/studio/"
+          cp LICENSE "dist/$name/"
+          cat > "dist/$name/README.txt" <<'TXT'
+          topowall studio
+
+          Serve this folder with any static file server, then open /web/studio/:
+
+            python3 -m http.server 8000
+            http://localhost:8000/web/studio/
+
+          Open or drop a .topo heightmap made with `topowall fetch`.
+          TXT
+          sed -i 's/^          //' "dist/$name/README.txt"
+          cd dist && zip -qr "$name.zip" "$name" && rm -rf "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studio
+          path: dist/*
+
+  release:
+    needs: [build, studio]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum -- * > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'MD'
+          ## Downloads
+
+          | Platform | File |
+          |---|---|
+          | Linux x86_64 | `topowall-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz` |
+          | Linux ARM64 | `topowall-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz` |
+          | macOS Apple Silicon | `topowall-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz` |
+          | macOS Intel | `topowall-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz` |
+          | Windows x86_64 | `topowall-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` |
+          | Studio (browser GUI) | `topowall-studio-${{ github.ref_name }}.zip` |
+
+          Each CLI archive contains only the `topowall` binary and licenses. It needs a
+          GPU driver with Vulkan, Metal, DX12 or OpenGL. Verify downloads with `SHA256SUMS`.
+
+          See the [README](https://github.com/${{ github.repository }}#readme) for usage.
+          MD
+          sed -i 's/^          //' notes.md
+          gh release create "${{ github.ref_name }}" dist/* \
+            --repo "${{ github.repository }}" \
+            --title "topowall ${{ github.ref_name }}" \
+            --notes-file notes.md
