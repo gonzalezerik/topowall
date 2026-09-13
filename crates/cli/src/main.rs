@@ -8,7 +8,7 @@ use std::{
 use topowall_core::{fetch, topo};
 use topowall_render::{
     palette::{self, BackgroundMode, GenerateOptions, Style},
-    spacing, Framing, Palette, Renderer, Theme,
+    spacing, Backend, Framing, GpuOptions, Palette, Renderer, Theme,
 };
 
 #[derive(Parser)]
@@ -36,6 +36,11 @@ enum Command {
     Themes,
     /// List built-in color schemes (for --palette).
     Palettes,
+    /// List the GPUs (and software renderers) topowall can use, best first.
+    Gpus {
+        #[command(flatten)]
+        gpu: GpuArgs,
+    },
 }
 
 #[derive(Args)]
@@ -107,6 +112,25 @@ struct ColorArgs {
 }
 
 #[derive(Args)]
+struct GpuArgs {
+    /// Graphics API: auto, vulkan, metal, dx12 or gl.
+    #[arg(long, env = "TOPOWALL_BACKEND", default_value = "auto")]
+    backend: String,
+    /// GPU to use: a number from `topowall gpus`, or part of its name (e.g. intel, radeon, nvidia).
+    #[arg(long, env = "TOPOWALL_GPU")]
+    gpu: Option<String>,
+}
+
+impl GpuArgs {
+    fn options(&self) -> Result<GpuOptions> {
+        Ok(GpuOptions {
+            backend: Backend::parse(&self.backend)?,
+            gpu: self.gpu.clone(),
+        })
+    }
+}
+
+#[derive(Args)]
 struct RenderArgs {
     input: PathBuf,
     #[command(flatten)]
@@ -120,6 +144,8 @@ struct RenderArgs {
     /// Also write the theme used to this TOML file.
     #[arg(long)]
     save_theme: Option<PathBuf>,
+    #[command(flatten)]
+    gpu: GpuArgs,
     /// JPEG quality (1-100) when the output ends in .jpg/.jpeg.
     #[arg(long, default_value_t = 90, value_parser = clap::value_parser!(u8).range(1..=100))]
     quality: u8,
@@ -237,6 +263,7 @@ fn main() -> Result<()> {
             Theme::builtin_names().for_each(|n| println!("{n}"));
             Ok(())
         }
+        Command::Gpus { gpu } => cmd_gpus(&gpu),
         Command::Palettes => {
             palette::builtin_names().for_each(|n| println!("{n}"));
             Ok(())
@@ -310,8 +337,22 @@ fn cmd_render(a: RenderArgs) -> Result<()> {
     }
 
     let t = Instant::now();
-    let renderer = Renderer::new()?;
-    let pixels = renderer.render(&hm, &resolved, w, h, framing)?;
+    let renderer = Renderer::with_options(&a.gpu.options()?)?;
+    if renderer.gpu().kind == topowall_render::gpu::GpuKind::Software {
+        eprintln!("note: rendering on the CPU (software), which is slower than a GPU");
+    }
+    let fitted = renderer.fit_heightmap(&hm);
+    if let Some(f) = &fitted {
+        eprintln!(
+            "note: heightmap {}x{} is larger than this GPU allows ({} px); using {}x{}",
+            hm.width,
+            hm.height,
+            renderer.max_texture_size(),
+            f.width,
+            f.height
+        );
+    }
+    let pixels = renderer.render(fitted.as_ref().unwrap_or(&hm), &resolved, w, h, framing)?;
     save_image(&a.output, w, h, pixels, a.quality)?;
     eprintln!(
         "rendered {}x{} with '{}' on {} in {:.2}s → {}",
@@ -321,6 +362,28 @@ fn cmd_render(a: RenderArgs) -> Result<()> {
         renderer.adapter_name(),
         t.elapsed().as_secs_f32(),
         a.output.display()
+    );
+    Ok(())
+}
+
+fn cmd_gpus(args: &GpuArgs) -> Result<()> {
+    let opts = args.options()?;
+    let gpus = topowall_render::gpu::list_gpus(opts.backend);
+    if gpus.is_empty() {
+        println!("No GPUs found. Install or update your graphics driver.");
+    }
+    for g in &gpus {
+        println!("{:>2}  {}  [{}, {}]", g.index, g.name, g.kind, g.backend);
+        if !g.driver.is_empty() {
+            println!("    driver: {}", g.driver);
+        }
+    }
+    match Renderer::with_options(&opts) {
+        Ok(r) => println!("\ntopowall will use: {}", r.adapter_name()),
+        Err(e) => println!("\nNo usable GPU: {e:#}"),
+    }
+    println!(
+        "Choose another with --gpu <number or name> or --backend <auto|vulkan|metal|dx12|gl>."
     );
     Ok(())
 }

@@ -21,13 +21,13 @@ shader. Use it from the command line or design a theme live in the browser.
 
 ## Gallery
 
-The five most-visited US national parks in 2025, each in five color styles:
-three popular color schemes and two hex themes. Every image was made with
+Five US national parks, each in five color styles: three popular color
+schemes and two hex themes. Every image was made with
 `--interval auto` by [`scripts/gallery.sh`](scripts/gallery.sh).
 
 ### 1. Great Smoky Mountains — Mount Le Conte and Clingmans Dome
 
-11.5 million visits · 24 km wide · `--center 35.610,-83.470` · auto spacing 50 m
+24 km wide · `--center 35.610,-83.470` · auto spacing 50 m
 
 | Solarized Dark | Rosé Pine | Catppuccin Mocha |
 |---|---|---|
@@ -37,7 +37,7 @@ three popular color schemes and two hex themes. Every image was made with
 
 ### 2. Zion — Zion Canyon and Angels Landing
 
-5.0 million visits · 14 km wide · `--center 37.255,-112.955` · auto spacing 50 m
+14 km wide · `--center 37.255,-112.955` · auto spacing 50 m
 
 | Solarized Dark | Rosé Pine | Catppuccin Mocha |
 |---|---|---|
@@ -47,7 +47,7 @@ three popular color schemes and two hex themes. Every image was made with
 
 ### 3. Yellowstone — Grand Canyon of the Yellowstone and Mount Washburn
 
-4.8 million visits · 24 km wide · `--center 44.750,-110.470` · auto spacing 25 m
+24 km wide · `--center 44.750,-110.470` · auto spacing 25 m
 
 | Solarized Dark | Rosé Pine | Catppuccin Mocha |
 |---|---|---|
@@ -57,7 +57,7 @@ three popular color schemes and two hex themes. Every image was made with
 
 ### 4. Grand Canyon — the inner canyon and the Colorado River
 
-4.4 million visits · 24 km wide · `--center 36.120,-112.080` · auto spacing 100 m
+24 km wide · `--center 36.120,-112.080` · auto spacing 100 m
 
 | Solarized Dark | Rosé Pine | Catppuccin Mocha |
 |---|---|---|
@@ -67,7 +67,7 @@ three popular color schemes and two hex themes. Every image was made with
 
 ### 5. Yosemite — Yosemite Valley, El Capitan to Half Dome
 
-4.3 million visits · 18 km wide · `--center 37.738,-119.575` · auto spacing 50 m
+18 km wide · `--center 37.738,-119.575` · auto spacing 50 m
 
 | Solarized Dark | Rosé Pine | Catppuccin Mocha |
 |---|---|---|
@@ -75,33 +75,40 @@ three popular color schemes and two hex themes. Every image was made with
 | **#3f5875 / #87abc0** | **#3e5d58 / #92aca0** | |
 | ![](docs/gallery/yosemite/3f5875-87abc0.jpg) | ![](docs/gallery/yosemite/3e5d58-92aca0.jpg) | |
 
-Visitation figures are 2025 recreation visits from the
-[National Park Service visitor use statistics](https://irma.nps.gov/Stats/).
-
 ## Install
 
 Download the build for your system from the
 [latest release](https://github.com/gonzalezerik/topowall/releases/latest).
 Each download contains only the `topowall` program and its licenses.
 
+**Graphics:** topowall runs on dedicated and integrated GPUs alike: Intel
+(HD, UHD, Iris, Arc), AMD Radeon (including laptop and desktop APU graphics),
+NVIDIA, and Apple. It uses Vulkan, Metal, DX12 or OpenGL 3.3, whichever
+works, and falls back to software rendering on the CPU when there's no GPU
+driver at all. See [Choosing a GPU](#choosing-a-gpu).
+
 ### Linux
 
-Needs a GPU driver with Vulkan (Mesa or NVIDIA) and glibc 2.35 or newer.
+Needs glibc 2.35 or newer and a graphics driver. Intel and AMD GPUs use the
+Mesa drivers most distributions install by default; NVIDIA GPUs use the NVIDIA
+driver or Mesa.
 
 ```sh
 # x86_64 — for ARM64, replace x86_64 with aarch64 in both places
-curl -L https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-v0.1.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
-sudo install topowall-v0.1.0-x86_64-unknown-linux-gnu/topowall /usr/local/bin/
+curl -L https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo install topowall-x86_64-unknown-linux-gnu/topowall /usr/local/bin/
 topowall --version
 ```
 
 ### macOS
 
+Works on Apple Silicon and Intel Macs through Metal.
+
 ```sh
 # Apple Silicon — on an Intel Mac, replace aarch64 with x86_64 in both places
-curl -L https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-v0.1.0-aarch64-apple-darwin.tar.gz | tar xz
+curl -L https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-aarch64-apple-darwin.tar.gz | tar xz
 sudo mkdir -p /usr/local/bin
-sudo install topowall-v0.1.0-aarch64-apple-darwin/topowall /usr/local/bin/
+sudo install topowall-aarch64-apple-darwin/topowall /usr/local/bin/
 topowall --version
 ```
 
@@ -110,13 +117,17 @@ unsigned program. Clear the flag with `xattr -d com.apple.quarantine topowall`.
 
 ### Windows
 
+Uses DX12 (Windows 10 or newer) with your Intel, AMD or NVIDIA graphics
+driver, and falls back to Vulkan, OpenGL or Windows' built-in software
+renderer.
+
 In PowerShell:
 
 ```powershell
 $dir = "$env:LOCALAPPDATA\topowall"
-Invoke-WebRequest https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-v0.1.0-x86_64-pc-windows-msvc.zip -OutFile "$env:TEMP\topowall.zip"
+Invoke-WebRequest https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-x86_64-pc-windows-msvc.zip -OutFile "$env:TEMP\topowall.zip"
 Expand-Archive "$env:TEMP\topowall.zip" -DestinationPath $dir -Force
-$bin = "$dir\topowall-v0.1.0-x86_64-pc-windows-msvc"
+$bin = "$dir\topowall-x86_64-pc-windows-msvc"
 [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";$bin", "User")
 ```
 
@@ -125,11 +136,11 @@ about the unsigned program, choose **More info → Run anyway**.
 
 ### Studio (browser GUI)
 
-Download [`topowall-studio-v0.1.0.zip`](https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-studio-v0.1.0.zip),
+Download [`topowall-studio.zip`](https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-studio.zip),
 extract it, and serve the folder with any static file server. With Python:
 
 ```sh
-cd topowall-studio-v0.1.0
+cd topowall-studio
 python3 -m http.server 8000     # Windows: py -m http.server 8000
 ```
 
@@ -166,6 +177,7 @@ topowall theme     Write a theme file from a palette or image
 topowall info      Show details about an elevation file
 topowall themes    List built-in themes
 topowall palettes  List built-in color schemes
+topowall gpus      List the GPUs topowall can use
 ```
 
 Every command has `--help`.
@@ -221,6 +233,8 @@ Terrarium-encoded PNG tile.
 | `--scale M` | Fixed metres per output pixel instead of filling the output. |
 | `--save-theme FILE` | Also write the theme that was used. |
 | `--quality Q` | JPEG quality 1–100 (default `90`). |
+| `--gpu N\|NAME` | Render on a specific GPU ([Choosing a GPU](#choosing-a-gpu)). |
+| `--backend API` | `auto`, `vulkan`, `metal`, `dx12` or `gl`. |
 | `-o FILE` | `.png`, `.jpg` or `.jpeg`. |
 
 When the heightmap and output have different aspect ratios, the map is scaled
@@ -234,6 +248,39 @@ instead of an image, so you can start from a palette and fine-tune by hand:
 ```sh
 topowall theme --palette nord --style vivid --interval 25 -o nord.toml
 ```
+
+### Choosing a GPU
+
+topowall picks a GPU automatically: a dedicated GPU first, then an integrated
+one, using your system's native graphics API (DX12 on Windows, Metal on macOS,
+Vulkan on Linux) before OpenGL. If a GPU or API fails, it tries the next one,
+and when nothing else works it renders on the CPU, which is slower.
+
+See what's available:
+
+```
+$ topowall gpus
+ 0  AMD Radeon 8060S Graphics (RADV STRIX_HALO)  [integrated GPU, Vulkan]
+ 1  AMD Radeon 8060S Graphics (radeonsi, strix_halo, ACO, DRM 3.64, 7.2.4)  [GPU, Gl]
+ 2  llvmpipe (LLVM 21.1.8, 256 bits)  [software (CPU), Vulkan]
+
+topowall will use: AMD Radeon 8060S Graphics (RADV STRIX_HALO) (integrated GPU, Vulkan)
+```
+
+Pick one yourself with `--gpu`, by number or by part of its name, or restrict
+the graphics API with `--backend`:
+
+```sh
+topowall render map.topo --gpu intel -o out.png     # e.g. the integrated GPU on a laptop that also has an NVIDIA GPU
+topowall render map.topo --gpu 1 -o out.png
+topowall render map.topo --backend gl -o out.png    # older GPUs without Vulkan or DX12
+```
+
+The environment variables `TOPOWALL_GPU` and `TOPOWALL_BACKEND` set the same
+options for every command.
+
+If a heightmap is larger than a GPU's texture size limit (8192 or 16384 pixels
+on many integrated GPUs), topowall shrinks it to fit and tells you.
 
 ### `topowall info`
 
@@ -326,6 +373,8 @@ color = [              # a ramp: color changes with elevation
 ]
 ```
 
+A theme can have up to 8 line tiers and 32 color stops in total.
+
 Colors are sRGB. `oklch()` is handy for adjusting lightness (`L`, 0–1) and
 color strength (`C`, about 0–0.37) without changing the hue (`H`, degrees).
 
@@ -343,8 +392,8 @@ fn shade(s: ShadeInput) -> vec4<f32> {
     // s.slope      metres of elevation change per output pixel
     // s.px, s.uv   output pixel position, and position from 0 to 1
     // s.elev_min, s.elev_max
-    // Helpers: contour_coverage(h, slope, interval, width), tier_color(i, h),
-    // params.background, tiers (from the theme's [[lines]])
+    // Helpers: contour_coverage(h, slope, interval, width), tier_count(),
+    // tier(i) and tier_color(i, h) for the theme's [[lines]], params.background
     ...
 }
 ```
@@ -469,7 +518,8 @@ open the file as a grayscale height image.
 
 ```sh
 # Needs Rust 1.88+ (Nix users can run `nix develop` for a ready toolchain)
-cargo test --workspace      # Rust tests
+cargo test --workspace      # Rust tests, including renders on your GPU
+# pick the adapter for the GPU tests, e.g. TOPOWALL_BACKEND=gl or TOPOWALL_GPU=intel
 cargo clippy --workspace -- -D warnings
 node --test web/test/*.test.js   # web color math tests
 

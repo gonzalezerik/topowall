@@ -3,15 +3,12 @@
 // The heightmap is an r32float texture of elevations in metres (row 0 = north).
 // Each output pixel samples it with Catmull-Rom interpolation, measures the
 // local slope in metres per output pixel, and draws anti-aliased lines at
-// every tier's interval. Colors and line settings come from the theme as
-// storage buffers, so changing a theme never recompiles the shader.
-
-struct Params {
-    size_origin: vec4<f32>,   // output width, output height, tile x, tile y (px)
-    map: vec4<f32>,           // map centre x, y (texels), texels per output px, 0
-    background: vec4<f32>,    // sRGB-encoded RGBA
-    elev_range: vec4<f32>,    // heightmap min, max (metres), 0, 0
-}
+// every tier's interval. Colors and line settings come from the theme as a
+// uniform buffer, so changing a theme never recompiles the shader.
+//
+// Only uniform buffers and a float texture are used (no storage buffers), so
+// this runs on OpenGL 3.3 / OpenGL ES 3.0 class GPUs, including older
+// integrated graphics.
 
 struct Tier {
     a: vec4<f32>,             // every (m), offset (m), width (px), opacity
@@ -23,10 +20,26 @@ struct Stop {
     elev: vec4<f32>,          // elevation (m), 0, 0, 0
 }
 
+struct Params {
+    size_origin: vec4<f32>,   // output width, output height, tile x, tile y (px)
+    map: vec4<f32>,           // map centre x, y (texels), texels per output px, tier count
+    background: vec4<f32>,    // sRGB-encoded RGBA
+    elev_range: vec4<f32>,    // heightmap min, max (metres), 0, 0
+    tiers: array<Tier, 8>,
+    stops: array<Stop, 32>,
+}
+
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var dem: texture_2d<f32>;
-@group(0) @binding(2) var<storage, read> tiers: array<Tier>;
-@group(0) @binding(3) var<storage, read> stops: array<Stop>;
+
+// Number of line tiers in the theme, and tier `i`.
+fn tier_count() -> u32 {
+    return u32(params.map.w);
+}
+
+fn tier(i: u32) -> Tier {
+    return params.tiers[i];
+}
 
 // Everything a shading function can use.
 struct ShadeInput {
@@ -89,27 +102,27 @@ fn contour_coverage(h: f32, slope: f32, interval: f32, width_px: f32) -> f32 {
 
 // Color of tier `i` at elevation `h` (ramps interpolate between stops).
 fn tier_color(i: u32, h: f32) -> vec4<f32> {
-    let first = u32(tiers[i].b.x);
-    let count = u32(tiers[i].b.y);
-    if (count <= 1u || h <= stops[first].elev.x) {
-        return stops[first].color;
+    let first = u32(params.tiers[i].b.x);
+    let count = u32(params.tiers[i].b.y);
+    if (count <= 1u || h <= params.stops[first].elev.x) {
+        return params.stops[first].color;
     }
     for (var s = first + 1u; s < first + count; s++) {
-        if (h <= stops[s].elev.x) {
-            let e0 = stops[s - 1u].elev.x;
-            let e1 = stops[s].elev.x;
+        if (h <= params.stops[s].elev.x) {
+            let e0 = params.stops[s - 1u].elev.x;
+            let e1 = params.stops[s].elev.x;
             let t = (h - e0) / max(e1 - e0, 1e-3);
-            return mix(stops[s - 1u].color, stops[s].color, t);
+            return mix(params.stops[s - 1u].color, params.stops[s].color, t);
         }
     }
-    return stops[first + count - 1u].color;
+    return params.stops[first + count - 1u].color;
 }
 
 //@shade-begin
 fn shade(s: ShadeInput) -> vec4<f32> {
     var col = params.background;
-    for (var i = 0u; i < arrayLength(&tiers); i++) {
-        let t = tiers[i];
+    for (var i = 0u; i < tier_count(); i++) {
+        let t = tier(i);
         let cov = contour_coverage(s.elevation - t.a.y, s.slope, t.a.x, t.a.z) * t.a.w;
         let c = tier_color(i, s.elevation);
         col = vec4<f32>(mix(col.rgb, c.rgb, cov * c.a), col.a);

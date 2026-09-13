@@ -90,3 +90,54 @@ pub fn sample_bicubic(data: &[f32], w: usize, h: usize, x: f64, y: f64) -> f32 {
     }
     acc
 }
+
+/// Resize a heightmap to `width` x `height` (smoothing first when shrinking so
+/// detail averages out instead of aliasing). Metres per pixel is updated.
+pub fn resize(hm: &Heightmap, width: usize, height: usize) -> Heightmap {
+    let (sx, sy) = (
+        hm.width as f64 / width as f64,
+        hm.height as f64 / height as f64,
+    );
+    let mut src = hm.clone();
+    let shrink = sx.max(sy);
+    if shrink > 1.0 {
+        gaussian_blur(&mut src, 0.5 * shrink);
+    }
+    let mut data = vec![0f32; width * height];
+    data.par_chunks_mut(width).enumerate().for_each(|(y, row)| {
+        let yy = (y as f64 + 0.5) * sy - 0.5;
+        for (x, v) in row.iter_mut().enumerate() {
+            *v = sample_bicubic(
+                &src.data,
+                src.width,
+                src.height,
+                (x as f64 + 0.5) * sx - 0.5,
+                yy,
+            );
+        }
+    });
+    let mut out = Heightmap::new(width, height, data);
+    out.m_per_px = hm.m_per_px.map(|m| m * sx);
+    out.extent = hm.extent;
+    out.source = hm.source.clone();
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resize_keeps_range_and_scale() {
+        let hm = {
+            let mut h = Heightmap::new(64, 32, (0..64 * 32).map(|i| (i % 64) as f32).collect());
+            h.m_per_px = Some(10.0);
+            h
+        };
+        let r = resize(&hm, 16, 8);
+        assert_eq!((r.width, r.height), (16, 8));
+        assert_eq!(r.m_per_px, Some(40.0));
+        let (lo, hi) = r.min_max();
+        assert!(lo >= -1.0 && hi <= 64.0 && hi > 50.0);
+    }
+}

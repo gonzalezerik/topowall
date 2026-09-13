@@ -17,8 +17,26 @@ jobs:
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
-      - run: cargo clippy --workspace -- -D warnings
+      - name: Software graphics drivers (Linux runners have no GPU)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers libgl1-mesa-dri libegl1
+      - name: Test (renders on the runner's GPU or software renderer)
+        run: cargo test --workspace
+        env:
+          TOPOWALL_REQUIRE_GPU: "1"
+      - name: Render through OpenGL too
+        if: runner.os == 'Linux'
+        run: cargo test -p topowall-render --test gpu
+        env:
+          TOPOWALL_REQUIRE_GPU: "1"
+          TOPOWALL_BACKEND: gl
+      - name: CLI smoke test
+        shell: bash
+        run: |
+          cargo run --release -p topowall -- gpus
+          cargo run --release -p topowall -- render web/studio/assets/yosemite.topo --palette rose-pine --size 640x400 -o smoke.png
+          test -s smoke.png
+      - run: cargo clippy --workspace --all-targets -- -D warnings
 
   web:
     runs-on: ubuntu-latest

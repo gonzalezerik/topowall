@@ -35,7 +35,7 @@ jobs:
           TARGET: ${{ matrix.target }}
           ARCHIVE: ${{ matrix.archive }}
         run: |
-          name="topowall-${GITHUB_REF_NAME}-${TARGET}"
+          name="topowall-${TARGET}"
           mkdir -p "dist/$name"
           bin=topowall
           case "$TARGET" in *windows*) bin=topowall.exe ;; esac
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Package the studio (code only, no sample map or images)
         run: |
-          name="topowall-studio-${GITHUB_REF_NAME}"
+          name="topowall-studio"
           mkdir -p "dist/$name/web/studio"
           cp -r web/src "dist/$name/web/"
           cp web/studio/index.html web/studio/studio.js web/studio/studio.css web/studio/presets.json "dist/$name/web/studio/"
@@ -101,15 +101,17 @@ jobs:
 
           | Platform | File |
           |---|---|
-          | Linux x86_64 | `topowall-${{ github.ref_name }}-x86_64-unknown-linux-gnu.tar.gz` |
-          | Linux ARM64 | `topowall-${{ github.ref_name }}-aarch64-unknown-linux-gnu.tar.gz` |
-          | macOS Apple Silicon | `topowall-${{ github.ref_name }}-aarch64-apple-darwin.tar.gz` |
-          | macOS Intel | `topowall-${{ github.ref_name }}-x86_64-apple-darwin.tar.gz` |
-          | Windows x86_64 | `topowall-${{ github.ref_name }}-x86_64-pc-windows-msvc.zip` |
-          | Studio (browser GUI) | `topowall-studio-${{ github.ref_name }}.zip` |
+          | Linux x86_64 | `topowall-x86_64-unknown-linux-gnu.tar.gz` |
+          | Linux ARM64 | `topowall-aarch64-unknown-linux-gnu.tar.gz` |
+          | macOS Apple Silicon | `topowall-aarch64-apple-darwin.tar.gz` |
+          | macOS Intel | `topowall-x86_64-apple-darwin.tar.gz` |
+          | Windows x86_64 | `topowall-x86_64-pc-windows-msvc.zip` |
+          | Studio (browser GUI) | `topowall-studio.zip` |
 
-          Each CLI archive contains only the `topowall` binary and licenses. It needs a
-          GPU driver with Vulkan, Metal, DX12 or OpenGL. Verify downloads with `SHA256SUMS`.
+          Each CLI archive contains only the `topowall` binary and licenses. It runs on
+          dedicated and integrated GPUs (Intel, AMD, NVIDIA, Apple) through Vulkan, Metal,
+          DX12 or OpenGL, and falls back to software rendering without a GPU driver.
+          Verify downloads with `SHA256SUMS`.
 
           See the [README](https://github.com/${{ github.repository }}#readme) for usage.
           MD

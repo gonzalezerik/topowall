@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Regenerate the README gallery: the five most-visited US national parks (2025)
-# rendered with five color styles.
+# Regenerate the README gallery: five US national parks rendered with five
+# color styles.
 #
 #   cargo build --release && scripts/gallery.sh
 #

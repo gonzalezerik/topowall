@@ -6,17 +6,14 @@ use bytemuck::{Pod, Zeroable};
 use topowall_core::Heightmap;
 use wgpu::util::DeviceExt;
 
+use crate::gpu::{self, GpuInfo, GpuOptions};
+
 pub const SHADER_SOURCE: &str = include_str!("shaders/contour.wgsl");
 const TILE: u32 = 4096;
 
-#[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
-struct Params {
-    size_origin: [f32; 4],
-    map: [f32; 4],
-    background: [f32; 4],
-    elev_range: [f32; 4],
-}
+/// Most line tiers and color stops a theme can use (fixed-size uniform arrays).
+pub const MAX_TIERS: usize = 8;
+pub const MAX_STOPS: usize = 32;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -30,6 +27,18 @@ struct GpuTier {
 struct GpuStop {
     color: [f32; 4],
     elev: [f32; 4],
+}
+
+/// Matches `struct Params` in contour.wgsl (std140: all members are vec4-aligned).
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+struct Params {
+    size_origin: [f32; 4],
+    map: [f32; 4],
+    background: [f32; 4],
+    elev_range: [f32; 4],
+    tiers: [GpuTier; MAX_TIERS],
+    stops: [GpuStop; MAX_STOPS],
 }
 
 /// How the heightmap is placed in the output.
@@ -61,7 +70,7 @@ impl Framing {
 pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
-    adapter_info: wgpu::AdapterInfo,
+    info: GpuInfo,
 }
 
 /// Put a custom `fn shade` into the shader template.
@@ -87,51 +96,49 @@ pub fn shader_with_shade(custom: Option<&str>) -> Result<String> {
 }
 
 impl Renderer {
+    /// Open the best available GPU.
     pub fn new() -> Result<Self> {
-        pollster::block_on(async {
-            let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::PRIMARY | wgpu::Backends::GL,
-                ..Default::default()
-            });
-            let adapter = instance
-                .request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::HighPerformance,
-                    compatible_surface: None,
-                    force_fallback_adapter: false,
-                })
-                .await
-                .context(
-                    "no GPU adapter found (is a Vulkan, Metal, DX12 or OpenGL driver installed?)",
-                )?;
-            let limits = adapter.limits();
-            let (device, queue) = adapter
-                .request_device(&wgpu::DeviceDescriptor {
-                    label: Some("topowall"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits {
-                        max_texture_dimension_2d: limits.max_texture_dimension_2d,
-                        max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size,
-                        ..wgpu::Limits::downlevel_defaults()
-                    },
-                    memory_hints: wgpu::MemoryHints::Performance,
-                    trace: wgpu::Trace::Off,
-                })
-                .await
-                .context("requesting GPU device")?;
-            let adapter_info = adapter.get_info();
-            Ok(Self {
-                device,
-                queue,
-                adapter_info,
-            })
+        Self::with_options(&GpuOptions::default())
+    }
+
+    pub fn with_options(opts: &GpuOptions) -> Result<Self> {
+        let gpu::Gpu {
+            device,
+            queue,
+            info,
+        } = gpu::select(opts)?;
+        Ok(Self {
+            device,
+            queue,
+            info,
         })
     }
 
+    pub fn gpu(&self) -> &GpuInfo {
+        &self.info
+    }
+
     pub fn adapter_name(&self) -> String {
-        format!(
-            "{} ({:?})",
-            self.adapter_info.name, self.adapter_info.backend
-        )
+        self.info.to_string()
+    }
+
+    /// Largest heightmap or tile edge this GPU accepts.
+    pub fn max_texture_size(&self) -> u32 {
+        self.device.limits().max_texture_dimension_2d
+    }
+
+    /// If `hm` is larger than this GPU's texture limit, a resized copy that fits.
+    pub fn fit_heightmap(&self, hm: &Heightmap) -> Option<Heightmap> {
+        let max = self.max_texture_size() as usize;
+        if hm.width <= max && hm.height <= max {
+            return None;
+        }
+        let s = max as f64 / hm.width.max(hm.height) as f64;
+        let (w, h) = (
+            ((hm.width as f64 * s).floor() as usize).clamp(1, max),
+            ((hm.height as f64 * s).floor() as usize).clamp(1, max),
+        );
+        Some(topowall_core::resample::resize(hm, w, h))
     }
 
     /// Render `hm` with `theme` into an RGBA8 buffer of `width` x `height`.
@@ -146,10 +153,20 @@ impl Renderer {
         let max_tex = self.device.limits().max_texture_dimension_2d;
         if hm.width as u32 > max_tex || hm.height as u32 > max_tex {
             bail!(
-                "heightmap {}x{} exceeds this GPU's texture limit ({max_tex})",
+                "heightmap {}x{} exceeds this GPU's texture limit ({max_tex}); resize it with Renderer::fit_heightmap",
                 hm.width,
                 hm.height
             );
+        }
+        if theme.tiers.len() > MAX_TIERS {
+            bail!(
+                "themes can have at most {MAX_TIERS} line tiers (this one has {})",
+                theme.tiers.len()
+            );
+        }
+        let stop_count: usize = theme.tiers.iter().map(|t| t.stops.len()).sum();
+        if stop_count > MAX_STOPS {
+            bail!("themes can have at most {MAX_STOPS} color stops in total (this one has {stop_count})");
         }
         if width == 0 || height == 0 {
             bail!("output size must be positive");
@@ -179,47 +196,42 @@ impl Renderer {
             bytemuck::cast_slice(&hm.data),
         );
 
-        let mut gpu_tiers = Vec::new();
-        let mut gpu_stops = Vec::new();
-        for t in &theme.tiers {
-            gpu_tiers.push(GpuTier {
+        let mut tiers = [GpuTier::zeroed(); MAX_TIERS];
+        let mut stops = [GpuStop::zeroed(); MAX_STOPS];
+        let mut next_stop = 0;
+        for (i, t) in theme.tiers.iter().enumerate() {
+            tiers[i] = GpuTier {
                 a: [t.every, t.offset, t.width, t.opacity],
-                b: [gpu_stops.len() as f32, t.stops.len() as f32, 0.0, 0.0],
-            });
-            gpu_stops.extend(t.stops.iter().map(|(e, c)| GpuStop {
-                color: c.to_array(),
-                elev: [*e, 0.0, 0.0, 0.0],
-            }));
+                b: [next_stop as f32, t.stops.len() as f32, 0.0, 0.0],
+            };
+            for (e, c) in &t.stops {
+                stops[next_stop] = GpuStop {
+                    color: c.to_array(),
+                    elev: [*e, 0.0, 0.0, 0.0],
+                };
+                next_stop += 1;
+            }
         }
-        if gpu_tiers.is_empty() {
-            // Storage buffers can't be empty; a zero-opacity tier draws nothing.
-            gpu_tiers.push(GpuTier {
-                a: [1.0, 0.0, 0.0, 0.0],
-                b: [0.0, 1.0, 0.0, 0.0],
-            });
-        }
-        if gpu_stops.is_empty() {
-            gpu_stops.push(GpuStop {
-                color: [0.0; 4],
-                elev: [0.0; 4],
-            });
-        }
-        let storage = |label, contents: &[u8]| {
-            self.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some(label),
-                    contents,
-                    usage: wgpu::BufferUsages::STORAGE,
-                })
+        let mut params = Params {
+            size_origin: [width as f32, height as f32, 0.0, 0.0],
+            map: [
+                hm.width as f32 * 0.5,
+                hm.height as f32 * 0.5,
+                tex_per_px,
+                theme.tiers.len() as f32,
+            ],
+            background: theme.background.to_array(),
+            elev_range: [lo, hi, 0.0, 0.0],
+            tiers,
+            stops,
         };
-        let tiers_buf = storage("tiers", bytemuck::cast_slice(&gpu_tiers));
-        let stops_buf = storage("stops", bytemuck::cast_slice(&gpu_stops));
-        let params_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("params"),
-            size: std::mem::size_of::<Params>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let params_buf = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("params"),
+                contents: bytemuck::bytes_of(&params),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
 
         let source = shader_with_shade(theme.shader.as_deref())?;
         self.device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -275,14 +287,6 @@ impl Renderer {
                         &dem.create_view(&Default::default()),
                     ),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: tiers_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: stops_buf.as_entire_binding(),
-                },
             ],
         });
 
@@ -316,17 +320,8 @@ impl Renderer {
         let mut out = vec![0u8; (width as usize) * (height as usize) * 4];
         for ty in (0..height).step_by(th as usize) {
             for tx in (0..width).step_by(tw as usize) {
-                let params = Params {
-                    size_origin: [width as f32, height as f32, tx as f32, ty as f32],
-                    map: [
-                        hm.width as f32 * 0.5,
-                        hm.height as f32 * 0.5,
-                        tex_per_px,
-                        0.0,
-                    ],
-                    background: theme.background.to_array(),
-                    elev_range: [lo, hi, 0.0, 0.0],
-                };
+                params.size_origin[2] = tx as f32;
+                params.size_origin[3] = ty as f32;
                 self.queue
                     .write_buffer(&params_buf, 0, bytemuck::bytes_of(&params));
 
