@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<canvas id="c" width="1280" height="800"></canvas>
+<pre id="out"></pre>
+<script type="module">
+  // Renders the sample heightmap with the hypsometric theme (ramps + opacity) in WebGL
+  // and exposes the pixels, for comparison with `topowall render` output.
+  import { parseTopo } from "../src/topo.js";
+  import { resolveTheme } from "../src/theme.js";
+  import { ContourRenderer } from "../src/renderer-webgl.js";
+  const theme = {
+    background: "#0b0d10",
+    lines: [
+      { every: 20, width: 1.25, opacity: 0.55, color: [
+        { at: "0%", color: "oklch(0.45 0.06 190)" }, { at: "50%", color: "oklch(0.55 0.05 140)" }, { at: "100%", color: "oklch(0.70 0.06 80)" }] },
+      { every: 100, width: 1.8, color: [
+        { at: "0%", color: "oklch(0.65 0.08 190)" }, { at: "50%", color: "oklch(0.75 0.07 140)" }, { at: "100%", color: "oklch(0.88 0.07 80)" }] },
+    ],
+  };
+  try {
+    const hm = await parseTopo(await (await fetch("../studio/assets/yosemite.topo")).arrayBuffer());
+    const r = new ContourRenderer(document.getElementById("c"));
+    r.setHeightmap(hm);
+    r.setTheme(resolveTheme(theme, hm.min, hm.max));
+    r.render();
+    document.getElementById("out").textContent = `${hm.width}x${hm.height} ${hm.min.toFixed(2)}..${hm.max.toFixed(2)}\n` + r.canvas.toDataURL("image/png");
+    document.title = "DONE";
+  } catch (e) {
+    document.getElementById("out").textContent = String(e.stack || e);
+    document.title = "ERROR";
+  }
+</script>

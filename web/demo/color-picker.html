@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>topowall · color picker</title>
+  <script type="module" src="../src/color-picker.js"></script>
+  <style>
+    :root { color-scheme: dark; --bg: #0d0f12; --panel: #16181d; --border: rgba(255,255,255,.08); --text: #e6e8ec; --muted: #8b919c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
+    main { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; display: grid; gap: 28px; }
+    h1 { font-size: 20px; margin: 0; font-weight: 600; }
+    h2 { font-size: 13px; margin: 0 0 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .06em; }
+    p { margin: 4px 0 0; color: var(--muted); }
+    .layout { display: grid; grid-template-columns: 1fr auto; gap: 28px; align-items: start; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+
+    /* Live preview: grayscale contour masks tinted with CSS */
+    .preview { position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; background: var(--c-bg); }
+    .preview .layer { position: absolute; inset: 0;
+      -webkit-mask-size: cover; mask-size: cover; mask-mode: luminance; }
+    .preview .minor { background: var(--c-minor); -webkit-mask-image: url(assets/yosemite-minor.jpg); mask-image: url(assets/yosemite-minor.jpg); }
+    .preview .major { background: var(--c-major); -webkit-mask-image: url(assets/yosemite-major.jpg); mask-image: url(assets/yosemite-major.jpg); }
+    .controls { display: flex; flex-wrap: wrap; gap: 14px 22px; margin-top: 14px; align-items: center; }
+    .control { display: grid; gap: 6px; }
+    .control span { color: var(--muted); font-size: 12px; }
+    pre { margin: 14px 0 0; padding: 12px 14px; background: #0b0c0f; border: 1px solid var(--border); border-radius: 10px;
+      font: 12.5px/1.55 ui-monospace, "JetBrains Mono", Menlo, monospace; color: #c9ced6; overflow-x: auto; }
+    .log { font: 12px ui-monospace, monospace; color: var(--muted); min-height: 1.5em; margin-top: 10px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Color picker</h1>
+    <p>Drag the ring for hue and the square for saturation and brightness, or type a hex / OKLCH value — the markers jump to it. Arrow keys nudge (Shift for bigger steps).</p>
+  </header>
+
+  <div class="layout">
+    <section class="card">
+      <h2>Theme preview · Yosemite Valley</h2>
+      <div class="preview" id="preview">
+        <div class="layer minor"></div>
+        <div class="layer major"></div>
+      </div>
+      <div class="controls">
+        <label class="control"><span>Background</span><topo-color-input id="bg" value="#000000"></topo-color-input></label>
+        <label class="control"><span>Lines every 20 m</span><topo-color-input id="minor" value="#3e5d58" alpha></topo-color-input></label>
+        <label class="control"><span>Lines every 100 m</span><topo-color-input id="major" value="#92aca0" alpha></topo-color-input></label>
+      </div>
+      <pre id="toml"></pre>
+    </section>
+
+    <section class="card">
+      <h2>Embedded panel</h2>
+      <topo-color-picker id="panel" value="#87abc0" alpha></topo-color-picker>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+  const $ = (id) => document.getElementById(id);
+  const preview = $("preview");
+  const inputs = { bg: $("bg"), minor: $("minor"), major: $("major") };
+
+  function render() {
+    preview.style.setProperty("--c-bg", inputs.bg.value);
+    preview.style.setProperty("--c-minor", inputs.minor.value);
+    preview.style.setProperty("--c-major", inputs.major.value);
+    $("toml").textContent =
+`background = "${inputs.bg.value}"
+
+[[lines]]
+every = 20
+color = "${inputs.minor.value}"
+width = 1.25
+
+[[lines]]
+every = 100
+color = "${inputs.major.value}"
+width = 1.8`;
+  }
+
+  await customElements.whenDefined("topo-color-input");
+  for (const el of Object.values(inputs)) el.addEventListener("input", render);
+  render();
+
+  const panel = $("panel");
+  const log = (ev) => ($("log").textContent = `${ev.type}: ${ev.detail.hex}  ${ev.detail.oklch ?? ""}`);
+  panel.addEventListener("input", log);
+  panel.addEventListener("change", log);
+
+  // Test hook: ?panel=<color> sets the embedded panel, ?open=<id> opens a popover.
+  const q = new URLSearchParams(location.search);
+  if (q.get("panel")) panel.value = q.get("panel");
+  if (q.get("open")) inputs[q.get("open")]?.open();
+</script>
+</body>
+</html>

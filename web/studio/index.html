@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>topowall studio</title>
+  <link rel="stylesheet" href="studio.css">
+  <script type="module" src="studio.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>topowall <span class="dim">studio</span></div>
+    <div class="map-info" id="map-info">Loading sample map…</div>
+    <div class="topbar-actions">
+      <label class="btn" title="Open a .topo heightmap (or drop one on the preview)">
+        Open .topo<input type="file" id="file" accept=".topo,image/png" hidden>
+      </label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage" id="stage" aria-label="Preview">
+      <div class="canvas-wrap" id="canvas-wrap">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div class="drop-hint" id="drop-hint" hidden>Drop a .topo file</div>
+      <div class="stage-bar">
+        <span id="stage-status" class="dim"></span>
+        <label class="check"><input type="checkbox" id="actual"> Actual pixels</label>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <section class="group">
+        <h2>Preset</h2>
+        <select id="preset" aria-label="Preset"></select>
+      </section>
+
+      <section class="group">
+        <h2>Output</h2>
+        <div class="row">
+          <select id="output-size" aria-label="Output size">
+            <option value="screen">This screen</option>
+            <option value="1920x1080">1920 × 1080</option>
+            <option value="2560x1440">2560 × 1440</option>
+            <option value="2880x1800">2880 × 1800</option>
+            <option value="3840x2160">3840 × 2160 (4K)</option>
+            <option value="5120x2160">5120 × 2160 (5K2K)</option>
+            <option value="custom">Custom…</option>
+          </select>
+        </div>
+        <div class="row custom-size" id="custom-size" hidden>
+          <input type="number" id="out-w" min="16" max="16384" value="2880" aria-label="Width"> ×
+          <input type="number" id="out-h" min="16" max="16384" value="1800" aria-label="Height">
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Spacing</h2>
+        <div class="field">
+          <div class="field-head">
+            <label for="interval">Line every</label>
+            <span class="value-edit"><input type="number" id="interval-num" min="1" max="1000" step="1" aria-label="Interval in metres"> m</span>
+          </div>
+          <div class="row">
+            <input type="range" id="interval" min="0" max="1000" step="1" aria-label="Interval (log scale)">
+            <button class="btn small" id="auto" type="button" aria-pressed="false" title="Pick spacing from the terrain and output size">Auto</button>
+          </div>
+        </div>
+        <div class="field">
+          <div class="field-head">
+            <label for="index-every">Index line every</label>
+            <span class="stepper">
+              <button type="button" class="btn small" id="index-dec" aria-label="Fewer lines per index line">−</button>
+              <input type="number" id="index-every" min="1" max="50" aria-label="Lines per index line">
+              <button type="button" class="btn small" id="index-inc" aria-label="More lines per index line">+</button>
+            </span>
+          </div>
+          <div class="hint" id="index-hint"></div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Colors</h2>
+        <div class="field-head">
+          <span>Background</span>
+          <topo-color-input id="background"></topo-color-input>
+        </div>
+        <div id="tiers"></div>
+      </section>
+
+      <section class="group">
+        <h2>Export</h2>
+        <pre class="code" id="toml"></pre>
+        <div class="row">
+          <button class="btn" id="copy-toml" type="button">Copy theme</button>
+          <button class="btn" id="download-toml" type="button">Download .toml</button>
+        </div>
+        <div class="hint">Render it with the CLI:</div>
+        <pre class="code small" id="cli"></pre>
+        <div class="row"><button class="btn" id="copy-cli" type="button">Copy command</button></div>
+      </section>
+    </aside>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

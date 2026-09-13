@@ -1,0 +1,491 @@
+[
+ {
+  "id": "theme--3e5d58-92aca0",
+  "group": "Themes",
+  "label": "#3e5d58 / #92aca0",
+  "theme": {
+   "name": "#3e5d58 / #92aca0",
+   "background": "#000000",
+   "lines": [
+    {
+     "every": 20,
+     "color": "#3e5d58",
+     "width": 1.25
+    },
+    {
+     "every": 100,
+     "color": "#92aca0",
+     "width": 1.8
+    }
+   ]
+  }
+ },
+ {
+  "id": "theme--3f5875-87abc0",
+  "group": "Themes",
+  "label": "#3f5875 / #87abc0",
+  "theme": {
+   "name": "#3f5875 / #87abc0",
+   "background": "#000000",
+   "lines": [
+    {
+     "every": 20,
+     "color": "#3f5875",
+     "width": 1.25
+    },
+    {
+     "every": 100,
+     "color": "#87abc0",
+     "width": 1.8
+    }
+   ]
+  }
+ },
+ {
+  "id": "theme--graphite",
+  "group": "Themes",
+  "label": "Graphite",
+  "theme": {
+   "name": "Graphite",
+   "background": "#000000",
+   "lines": [
+    {
+     "every": 20,
+     "color": "#5c5c5c",
+     "width": 1.25
+    },
+    {
+     "every": 100,
+     "color": "#949494",
+     "width": 1.8
+    }
+   ]
+  }
+ },
+ {
+  "id": "theme--hypsometric",
+  "group": "Themes",
+  "label": "Hypsometric",
+  "theme": {
+   "name": "Hypsometric",
+   "background": "#0b0d10",
+   "lines": [
+    {
+     "every": 20,
+     "width": 1.25,
+     "opacity": 0.55,
+     "color": [
+      {
+       "at": "0%",
+       "color": "oklch(0.45 0.06 190)"
+      },
+      {
+       "at": "50%",
+       "color": "oklch(0.55 0.05 140)"
+      },
+      {
+       "at": "100%",
+       "color": "oklch(0.70 0.06 80)"
+      }
+     ]
+    },
+    {
+     "every": 100,
+     "width": 1.8,
+     "color": [
+      {
+       "at": "0%",
+       "color": "oklch(0.65 0.08 190)"
+      },
+      {
+       "at": "50%",
+       "color": "oklch(0.75 0.07 140)"
+      },
+      {
+       "at": "100%",
+       "color": "oklch(0.88 0.07 80)"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--catppuccin-mocha--subtle",
+  "group": "Palettes",
+  "label": "Catppuccin Mocha (subtle)",
+  "theme": {
+   "name": "Catppuccin Mocha (subtle)",
+   "background": "#1e1e2e",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#5e7191"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#a3b6d6"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--catppuccin-mocha--vivid",
+  "group": "Palettes",
+  "label": "Catppuccin Mocha (vivid)",
+  "theme": {
+   "name": "Catppuccin Mocha (vivid)",
+   "background": "#1e1e2e",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#5a7cb3"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#89b4fa"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--dracula--subtle",
+  "group": "Palettes",
+  "label": "Dracula (subtle)",
+  "theme": {
+   "name": "Dracula (subtle)",
+   "background": "#282a36",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#7e7194"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#bfb2d5"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--dracula--vivid",
+  "group": "Palettes",
+  "label": "Dracula (vivid)",
+  "theme": {
+   "name": "Dracula (vivid)",
+   "background": "#282a36",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#916fc1"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#bd93f9"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--everforest-dark-medium--subtle",
+  "group": "Palettes",
+  "label": "Everforest Dark Medium (subtle)",
+  "theme": {
+   "name": "Everforest Dark Medium (subtle)",
+   "background": "#2d353b",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#578a83"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#99c8c1"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--everforest-dark-medium--vivid",
+  "group": "Palettes",
+  "label": "Everforest Dark Medium (vivid)",
+  "theme": {
+   "name": "Everforest Dark Medium (vivid)",
+   "background": "#2d353b",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#63948d"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#7fbbb3"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--gruvbox-dark--subtle",
+  "group": "Palettes",
+  "label": "Gruvbox dark (subtle)",
+  "theme": {
+   "name": "Gruvbox dark (subtle)",
+   "background": "#282828",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#4d8083"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#93c3c5"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--gruvbox-dark--vivid",
+  "group": "Palettes",
+  "label": "Gruvbox dark (vivid)",
+  "theme": {
+   "name": "Gruvbox dark (vivid)",
+   "background": "#282828",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#4f8386"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#458588"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--kanagawa--subtle",
+  "group": "Palettes",
+  "label": "Kanagawa (subtle)",
+  "theme": {
+   "name": "Kanagawa (subtle)",
+   "background": "#1f1f28",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#607091"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#a5b6d6"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--kanagawa--vivid",
+  "group": "Palettes",
+  "label": "Kanagawa (vivid)",
+  "theme": {
+   "name": "Kanagawa (vivid)",
+   "background": "#1f1f28",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#637bac"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#7e9cd8"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--nord--subtle",
+  "group": "Palettes",
+  "label": "Nord (subtle)",
+  "theme": {
+   "name": "Nord (subtle)",
+   "background": "#2e3440",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#65829e"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#a5c0dc"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--nord--vivid",
+  "group": "Palettes",
+  "label": "Nord (vivid)",
+  "theme": {
+   "name": "Nord (vivid)",
+   "background": "#2e3440",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#718ca6"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#81a1c1"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--rose-pine--subtle",
+  "group": "Palettes",
+  "label": "Rosé Pine (subtle)",
+  "theme": {
+   "name": "Rosé Pine (subtle)",
+   "background": "#191724",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#726385"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#baabcc"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--rose-pine--vivid",
+  "group": "Palettes",
+  "label": "Rosé Pine (vivid)",
+  "theme": {
+   "name": "Rosé Pine (vivid)",
+   "background": "#191724",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#826a9d"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#c4a7e7"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--solarized-dark--subtle",
+  "group": "Palettes",
+  "label": "Solarized Dark (subtle)",
+  "theme": {
+   "name": "Solarized Dark (subtle)",
+   "background": "#002b36",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#597893"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#9dbcd6"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--solarized-dark--vivid",
+  "group": "Palettes",
+  "label": "Solarized Dark (vivid)",
+  "theme": {
+   "name": "Solarized Dark (vivid)",
+   "background": "#002b36",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#3885c1"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#268bd2"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--tokyo-night-dark--subtle",
+  "group": "Palettes",
+  "label": "Tokyo Night Dark (subtle)",
+  "theme": {
+   "name": "Tokyo Night Dark (subtle)",
+   "background": "#1a1b26",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#467681"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#8fbcc7"
+    }
+   ]
+  }
+ },
+ {
+  "id": "palette--tokyo-night-dark--vivid",
+  "group": "Palettes",
+  "label": "Tokyo Night Dark (vivid)",
+  "theme": {
+   "name": "Tokyo Night Dark (vivid)",
+   "background": "#1a1b26",
+   "lines": [
+    {
+     "every": 20.0,
+     "width": 1.25,
+     "color": "#19879a"
+    },
+    {
+     "every": 100.0,
+     "width": 1.8,
+     "color": "#2ac3de"
+    }
+   ]
+  }
+ }
+]

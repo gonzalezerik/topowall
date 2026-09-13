@@ -1,0 +1,130 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<script type="module" src="../src/color-picker.js"></script>
+<body>
+<topo-color-picker id="p" value="#3e5d58" alpha></topo-color-picker>
+<topo-color-input id="ci" value="#123456"></topo-color-input>
+<pre id="out"></pre>
+<script type="module">
+  // Browser tests for the picker. Results go to <pre id="out"> and document.title ("PASS n" / "FAIL n").
+  // Run: chromium --headless --dump-dom http://localhost:PORT/web/test/picker.test.html
+  await customElements.whenDefined("topo-color-picker");
+  const p = document.getElementById("p");
+  const root = p.shadowRoot;
+  const $ = (s) => root.querySelector(s);
+  const results = [];
+  const check = (name, cond, extra = "") => results.push(`${cond ? "ok  " : "FAIL"} ${name}${cond ? "" : "  " + extra}`);
+  const near = (a, b, tol = 1.01) => Math.abs(a - b) <= tol;
+  const px = (el, prop) => parseFloat(el.style[prop]);
+  const type = (input, text) => {
+    input.focus();
+    input.value = text;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const WHEEL = 232, RING = 22, GAP = 8;
+  const SQUARE = Math.floor((WHEEL - 2 * RING - 2 * GAP) / Math.SQRT2);
+  const ringPos = (h) => {
+    const r = WHEEL / 2 - RING / 2, rad = (h * Math.PI) / 180;
+    return [WHEEL / 2 + r * Math.sin(rad), WHEEL / 2 - r * Math.cos(rad)];
+  };
+
+  // 1. Typing a hex moves both markers to its exact position.
+  const cases = [
+    ["#ff0000", 0, 1, 1], ["#00ff00", 120, 1, 1], ["#0000ff", 240, 1, 1],
+    ["#3e5d58", 170.3, 0.3333, 0.3647], ["#ff8800", 32, 1, 1], ["#87abc0", 202.1, 0.2969, 0.7529],
+  ];
+  for (const [hex, h, s, v] of cases) {
+    type($(".hex"), hex);
+    const [rx, ry] = ringPos(h);
+    check(`${hex} ring marker`, near(px($(".ring-handle"), "left"), rx, 1.5) && near(px($(".ring-handle"), "top"), ry, 1.5),
+      `got ${px($(".ring-handle"), "left")},${px($(".ring-handle"), "top")} want ${rx},${ry}`);
+    check(`${hex} square marker`, near(px($(".sv-handle"), "left"), s * SQUARE) && near(px($(".sv-handle"), "top"), (1 - v) * SQUARE),
+      `got ${px($(".sv-handle"), "left")},${px($(".sv-handle"), "top")}`);
+    check(`${hex} value`, p.value === hex, p.value);
+    check(`${hex} preview square`, $(".new").style.background !== "", $(".new").style.background);
+  }
+
+  // 2. Hex without '#', short hex, and alpha hex.
+  type($(".hex"), "abc");
+  check("short hex without #", p.value === "#aabbcc", p.value);
+  type($(".hex"), "#11223380");
+  check("alpha hex", p.value === "#11223380" && $("#a").value === "50", `${p.value} a=${$("#a").value}`);
+  type($(".hex"), "#112233");
+
+  // 3. Invalid input is flagged and leaves the color alone.
+  type($(".hex"), "#12zz");
+  check("invalid hex flagged", $(".hex").classList.contains("invalid") && p.value === "#112233", p.value);
+  $(".hex").blur();
+
+  // 4. Grays keep the previous hue (ring marker doesn't jump).
+  type($(".hex"), "#3e5d58");
+  const before = px($(".ring-handle"), "left");
+  type($(".hex"), "#808080");
+  check("gray keeps hue", px($(".ring-handle"), "left") === before);
+  check("gray value", p.value === "#808080", p.value);
+
+  // 5. OKLCH input.
+  type($(".oklch"), "oklch(0.453 0.037 183.5)");
+  check("oklch input", p.value === "#3e5d58", p.value);
+
+  // 6. Channel fields.
+  type($("#r"), "255");
+  check("R field", p.value.startsWith("#ff"), p.value);
+  type($("#h"), "240");
+  check("H field moves ring", near(px($(".ring-handle"), "left"), ringPos(240)[0], 1.5));
+
+  // 7. Keyboard on the square.
+  type($(".hex"), "#808080");
+  const sq = $(".square");
+  const s0 = px($(".sv-handle"), "left");
+  sq.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", shiftKey: true, bubbles: true }));
+  check("Shift+ArrowRight adds 10% saturation", near(px($(".sv-handle"), "left") - s0, 0.1 * SQUARE));
+
+  // 8. Pointer drag on the square and ring.
+  const wheel = $(".wheel");
+  const rect = wheel.getBoundingClientRect();
+  const off = (WHEEL - SQUARE) / 2;
+  const fire = (type, x, y) => wheel.dispatchEvent(new PointerEvent(type, { clientX: rect.left + x, clientY: rect.top + y, pointerId: 1, bubbles: true }));
+  wheel.setPointerCapture = () => {};
+  fire("pointerdown", off + SQUARE, off);        // top-right corner → s=1, v=1
+  fire("pointerup", off + SQUARE, off);
+  check("drag square corner = full saturation/brightness", $("#s").value === "100" && $("#v").value === "100", `${$("#s").value},${$("#v").value}`);
+  fire("pointerdown", WHEEL / 2, RING / 2);      // top of ring → hue 0 (red)
+  fire("pointerup", WHEEL / 2, RING / 2);
+  check("drag ring top = red", p.value === "#ff0000", p.value);
+
+  // 9. Events.
+  let inputs = 0, changes = 0;
+  p.addEventListener("input", () => inputs++);
+  p.addEventListener("change", () => changes++);
+  type($(".hex"), "#445566");
+  $(".hex").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  check("input + change events", inputs >= 1 && changes === 1, `${inputs}/${changes}`);
+
+  // 10. Preview shows "current" after an edit; clicking it reverts.
+  p.value = "#111111";
+  type($(".hex"), "#eeeeee");
+  check("current swatch visible after edit", !$(".current-wrap").hidden);
+  $(".current-wrap").click();
+  check("click current reverts", p.value === "#111111", p.value);
+
+  // 11. <topo-color-input>: open, edit, cancel restores; apply commits.
+  const ci = document.getElementById("ci");
+  const inner = ci.shadowRoot.querySelector("topo-color-picker");
+  ci.open();
+  type(inner.shadowRoot.querySelector(".hex"), "#abcdef");
+  check("popover live value", ci.value === "#abcdef", ci.value);
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  check("Escape cancels", ci.value === "#123456" && ci.shadowRoot.querySelector(".pop").hidden, ci.value);
+  ci.open();
+  type(inner.shadowRoot.querySelector(".hex"), "#abcdef");
+  inner.shadowRoot.querySelector(".apply").click();
+  check("Apply commits and closes", ci.value === "#abcdef" && ci.shadowRoot.querySelector(".pop").hidden, ci.value);
+  check("trigger shows hex", ci.shadowRoot.querySelector(".text").textContent === "#abcdef");
+
+  const failed = results.filter((r) => r.startsWith("FAIL")).length;
+  document.getElementById("out").textContent = results.join("\n");
+  document.title = failed ? `FAIL ${failed}/${results.length}` : `PASS ${results.length}`;
+</script>
+</body>

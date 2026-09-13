@@ -1,0 +1,16 @@
+[package]
+name = "topowall"
+description = "Topographic contour wallpapers from real elevation data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+readme = "../../README.md"
+
+[dependencies]
+topowall-core.workspace = true
+topowall-render.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

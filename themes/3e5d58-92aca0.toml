@@ -1,0 +1,12 @@
+name = "#3e5d58 / #92aca0"
+background = "#000000"
+
+[[lines]]
+every = 20
+color = "#3e5d58"
+width = 1.25
+
+[[lines]]
+every = 100
+color = "#92aca0"
+width = 1.8
