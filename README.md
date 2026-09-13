@@ -80,15 +80,64 @@ Visitation figures are 2025 recreation visits from the
 
 ## Install
 
-**Nix**
+Download the build for your system from the
+[latest release](https://github.com/gonzalezerik/topowall/releases/latest).
+Each download contains only the `topowall` program and its licenses.
+
+### Linux
+
+Needs a GPU driver with Vulkan (Mesa or NVIDIA) and glibc 2.35 or newer.
 
 ```sh
-nix run github:gonzalezerik/topowall -- --help
-nix profile install github:gonzalezerik/topowall
+# x86_64 — for ARM64, replace x86_64 with aarch64 in both places
+curl -L https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-v0.1.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo install topowall-v0.1.0-x86_64-unknown-linux-gnu/topowall /usr/local/bin/
+topowall --version
 ```
 
-**From source** — needs Rust 1.88+ and a GPU driver with Vulkan, Metal, DX12 or
-OpenGL:
+### macOS
+
+```sh
+# Apple Silicon — on an Intel Mac, replace aarch64 with x86_64 in both places
+curl -L https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-v0.1.0-aarch64-apple-darwin.tar.gz | tar xz
+sudo mkdir -p /usr/local/bin
+sudo install topowall-v0.1.0-aarch64-apple-darwin/topowall /usr/local/bin/
+topowall --version
+```
+
+If you downloaded the archive in a browser instead, macOS may block the
+unsigned program. Clear the flag with `xattr -d com.apple.quarantine topowall`.
+
+### Windows
+
+In PowerShell:
+
+```powershell
+$dir = "$env:LOCALAPPDATA\topowall"
+Invoke-WebRequest https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-v0.1.0-x86_64-pc-windows-msvc.zip -OutFile "$env:TEMP\topowall.zip"
+Expand-Archive "$env:TEMP\topowall.zip" -DestinationPath $dir -Force
+$bin = "$dir\topowall-v0.1.0-x86_64-pc-windows-msvc"
+[Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "User") + ";$bin", "User")
+```
+
+Open a new terminal and run `topowall --version`. If Windows SmartScreen warns
+about the unsigned program, choose **More info → Run anyway**.
+
+### Studio (browser GUI)
+
+Download [`topowall-studio-v0.1.0.zip`](https://github.com/gonzalezerik/topowall/releases/download/v0.1.0/topowall-studio-v0.1.0.zip),
+extract it, and serve the folder with any static file server. With Python:
+
+```sh
+cd topowall-studio-v0.1.0
+python3 -m http.server 8000     # Windows: py -m http.server 8000
+```
+
+Then open <http://localhost:8000/web/studio/>. See the [GUI guide](#gui-guide).
+
+### Build from source
+
+On any system with [Rust](https://rustup.rs) 1.88 or newer:
 
 ```sh
 git clone https://github.com/gonzalezerik/topowall
@@ -419,7 +468,7 @@ open the file as a grayscale height image.
 ## Development
 
 ```sh
-nix develop                 # or install Rust 1.88+
+# Needs Rust 1.88+ (Nix users can run `nix develop` for a ready toolchain)
 cargo test --workspace      # Rust tests
 cargo clippy --workspace -- -D warnings
 node --test web/test/*.test.js   # web color math tests
