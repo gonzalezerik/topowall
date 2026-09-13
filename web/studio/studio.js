@@ -1,4 +1,4 @@
-// topowall studio: live theme editing on a real heightmap.
+// topowall GUI: live theme editing on a real heightmap.
 
 import "../src/color-picker.js";
 import { parseTopo } from "../src/topo.js";
