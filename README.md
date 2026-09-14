@@ -138,6 +138,7 @@ renderer.
 In PowerShell:
 
 ```powershell
+# x86_64 — on ARM64 PCs (e.g. Snapdragon), replace x86_64 with aarch64 in both places
 $dir = "$env:LOCALAPPDATA\topowall"
 Invoke-WebRequest https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-x86_64-pc-windows-msvc.zip -OutFile "$env:TEMP\topowall.zip"
 Expand-Archive "$env:TEMP\topowall.zip" -DestinationPath $dir -Force

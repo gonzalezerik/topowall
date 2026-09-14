@@ -3,12 +3,18 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  # Attach musl builds to an existing release without touching its other files.
+  # Add builds to an existing release. Files the release already has are left
+  # untouched; SHA256SUMS and the downloads table gain the new entries.
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to add musl builds to (e.g. v0.2.0)"
+        description: "Existing release tag (e.g. v0.2.0)"
         required: true
+      builds:
+        description: "Which builds to add"
+        type: choice
+        options: [all, musl, windows-arm64]
+        default: all
 
 permissions:
   contents: write
@@ -61,9 +67,55 @@ jobs:
           name: ${{ matrix.target }}
           path: dist/*
 
+  # Native build on Windows 11 ARM64 (Snapdragon and other ARM PCs).
+  build-windows-arm64:
+    if: github.event_name == 'push' || inputs.builds == 'all' || inputs.builds == 'windows-arm64'
+    runs-on: windows-11-arm
+    env:
+      TARGET: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+      - name: Make sure clang is available (the TLS library needs it on ARM64 Windows)
+        shell: pwsh
+        run: |
+          $llvm = "C:\Program Files\LLVM\bin"
+          if (-not (Get-Command clang -ErrorAction SilentlyContinue)) {
+            if (-not (Test-Path "$llvm\clang.exe")) { choco install llvm -y --no-progress }
+            Add-Content $env:GITHUB_PATH $llvm
+          }
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64-pc-windows-msvc
+      - name: Build
+        run: cargo build --release --locked -p topowall --target aarch64-pc-windows-msvc
+      - name: Smoke test
+        shell: bash
+        run: |
+          bin="target/${TARGET}/release/topowall.exe"
+          "$bin" gpus
+          "$bin" render web/studio/assets/yosemite.topo --palette rose-pine --size 320x200 -o smoke.png
+          test -s smoke.png
+      - name: Package
+        shell: bash
+        run: |
+          name="topowall-${TARGET}"
+          mkdir -p "dist/$name"
+          cp "target/${TARGET}/release/topowall.exe" LICENSE crates/render/palettes/LICENSE-tinted-theming "dist/$name/"
+          cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null && rm -rf "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aarch64-pc-windows-msvc
+          path: dist/*
+
   # Built on Alpine and dynamically linked against musl: a fully static binary
   # can't load GPU drivers (Vulkan / OpenGL) at runtime.
   build-musl:
+    if: github.event_name == 'push' || inputs.builds == 'all' || inputs.builds == 'musl'
     strategy:
       fail-fast: false
       matrix:
@@ -133,7 +185,7 @@ jobs:
 
   release:
     if: github.event_name == 'push'
-    needs: [build, build-musl, studio]
+    needs: [build, build-windows-arm64, build-musl, studio]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -158,6 +210,7 @@ jobs:
           | macOS Apple Silicon | `topowall-aarch64-apple-darwin.tar.gz` |
           | macOS Intel | `topowall-x86_64-apple-darwin.tar.gz` |
           | Windows x86_64 | `topowall-x86_64-pc-windows-msvc.zip` |
+          | Windows ARM64 | `topowall-aarch64-pc-windows-msvc.zip` |
           | Studio (browser GUI) | `topowall-studio.zip` |
 
           Each CLI archive contains only the `topowall` binary and licenses. It runs on
@@ -173,33 +226,57 @@ jobs:
             --title "topowall ${{ github.ref_name }}" \
             --notes-file notes.md
 
-  add-musl:
-    if: github.event_name == 'workflow_dispatch'
-    needs: [build-musl]
+  add-builds:
+    needs: [build-windows-arm64, build-musl]
+    if: >-
+      always() && github.event_name == 'workflow_dispatch'
+      && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ inputs.tag }}
+      REPO: ${{ github.repository }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - name: Upload musl builds and extend SHA256SUMS
+      - name: Upload builds the release doesn't have yet
         run: |
-          repo="${{ github.repository }}"
-          gh release download "$TAG" --repo "$repo" --pattern SHA256SUMS --dir old
-          (cd dist && sha256sum -- *) > musl.sums
-          grep -v -- '-linux-musl.tar.gz' old/SHA256SUMS | cat - musl.sums > SHA256SUMS
-          gh release upload "$TAG" dist/* --repo "$repo"
-          gh release upload "$TAG" SHA256SUMS --repo "$repo" --clobber
-      - name: Add musl rows to the release notes
-        run: |
-          repo="${{ github.repository }}"
-          gh release view "$TAG" --repo "$repo" --json body --jq .body > notes.md
-          if ! grep -q 'linux-musl' notes.md; then
-            awk '{ print } /aarch64-unknown-linux-gnu\.tar\.gz/ {
-              print "| Linux x86_64, musl (Alpine, Void musl, …) | `topowall-x86_64-unknown-linux-musl.tar.gz` |"
-              print "| Linux ARM64, musl | `topowall-aarch64-unknown-linux-musl.tar.gz` |" }' notes.md > new.md
-            gh release edit "$TAG" --repo "$repo" --notes-file new.md
+          gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' > existing.txt
+          : > added.txt
+          for f in dist/*; do
+            name=$(basename "$f")
+            if grep -qxF "$name" existing.txt; then
+              echo "already in $TAG: $name (left unchanged)"
+            else
+              gh release upload "$TAG" "$f" --repo "$REPO"
+              echo "$name" >> added.txt
+            fi
+          done
+          if [ -s added.txt ]; then
+            gh release download "$TAG" --repo "$REPO" --pattern SHA256SUMS --dir old
+            (cd dist && xargs sha256sum -- < ../added.txt) > new.sums
+            grep -vFf added.txt old/SHA256SUMS | cat - new.sums > SHA256SUMS
+            gh release upload "$TAG" SHA256SUMS --repo "$REPO" --clobber
           fi
+      - name: Add rows for new builds to the downloads table
+        run: |
+          [ -s added.txt ] || exit 0
+          gh release view "$TAG" --repo "$REPO" --json body --jq .body > notes.md
+          label() {
+            case "$1" in
+              topowall-x86_64-unknown-linux-musl.tar.gz)  echo "Linux x86_64, musl (Alpine, Void musl, …)" ;;
+              topowall-aarch64-unknown-linux-musl.tar.gz) echo "Linux ARM64, musl" ;;
+              topowall-aarch64-pc-windows-msvc.zip)       echo "Windows ARM64" ;;
+              *) echo "$1" ;;
+            esac
+          }
+          rows=""
+          while read -r name; do
+            grep -qF "\`$name\`" notes.md || rows="${rows}| $(label "$name") | \`$name\` |"$'\n'
+          done < added.txt
+          [ -n "$rows" ] || exit 0
+          printf '%s' "$rows" > rows.md
+          awk 'FNR == NR { r = r $0 "\n"; next } /^\| Studio/ && !done { printf "%s", r; done = 1 } { print }' rows.md notes.md > new.md
+          gh release edit "$TAG" --repo "$REPO" --notes-file new.md

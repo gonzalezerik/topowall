@@ -9,13 +9,22 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest, windows-11-arm]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+      - name: Make sure clang is available (the TLS library needs it on ARM64 Windows)
+        if: runner.os == 'Windows' && runner.arch == 'ARM64'
+        shell: pwsh
+        run: |
+          $llvm = "C:\Program Files\LLVM\bin"
+          if (-not (Get-Command clang -ErrorAction SilentlyContinue)) {
+            if (-not (Test-Path "$llvm\clang.exe")) { choco install llvm -y --no-progress }
+            Add-Content $env:GITHUB_PATH $llvm
+          }
       - uses: Swatinem/rust-cache@v2
       - name: Software graphics drivers (Linux runners have no GPU)
         if: runner.os == 'Linux'
