@@ -46,3 +46,19 @@ jobs:
         with:
           node-version: 22
       - run: node --test web/test/*.test.js
+
+  musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test on Alpine (musl) with Mesa software Vulkan and OpenGL
+        run: |
+          docker run --rm -v "$PWD":/src -w /src alpine:3.22 sh -euc '
+            apk add --no-cache build-base curl perl linux-headers \
+              vulkan-loader mesa-vulkan-swrast mesa-dri-gallium mesa-egl
+            curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal
+            . /root/.cargo/env
+            export RUSTFLAGS="-C target-feature=-crt-static" TOPOWALL_REQUIRE_GPU=1 XDG_RUNTIME_DIR=/tmp
+            cargo test --locked --workspace
+            TOPOWALL_BACKEND=gl cargo test --locked -p topowall-render --test gpu
+          '

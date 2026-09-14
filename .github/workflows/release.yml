@@ -3,12 +3,19 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Attach musl builds to an existing release without touching its other files.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to add musl builds to (e.g. v0.2.0)"
+        required: true
 
 permissions:
   contents: write
 
 jobs:
   build:
+    if: github.event_name == 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -54,7 +61,49 @@ jobs:
           name: ${{ matrix.target }}
           path: dist/*
 
+  # Built on Alpine and dynamically linked against musl: a fully static binary
+  # can't load GPU drivers (Vulkan / OpenGL) at runtime.
+  build-musl:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl,  os: ubuntu-22.04 }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Build and smoke-test on Alpine
+        run: |
+          docker run --rm -v "$PWD":/src -w /src -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" alpine:3.22 sh -euc '
+            apk add --no-cache build-base curl perl linux-headers file \
+              vulkan-loader mesa-vulkan-swrast mesa-dri-gallium mesa-egl
+            curl -sSf https://sh.rustup.rs | sh -s -- -y -q --profile minimal
+            . /root/.cargo/env
+            RUSTFLAGS="-C target-feature=-crt-static" cargo build --release --locked -p topowall
+            file target/release/topowall | grep -q "interpreter /lib/ld-musl"
+            XDG_RUNTIME_DIR=/tmp ./target/release/topowall render web/studio/assets/yosemite.topo \
+              --palette rose-pine --size 320x200 -o /tmp/smoke.png
+            test -s /tmp/smoke.png
+            chown -R "$HOST_UID:$HOST_GID" target
+          '
+      - name: Package
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          name="topowall-${TARGET}"
+          mkdir -p "dist/$name"
+          cp target/release/topowall LICENSE crates/render/palettes/LICENSE-tinted-theming "dist/$name/"
+          cd dist && tar czf "$name.tar.gz" "$name" && rm -rf "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
   studio:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +132,8 @@ jobs:
           path: dist/*
 
   release:
-    needs: [build, studio]
+    if: github.event_name == 'push'
+    needs: [build, build-musl, studio]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -103,6 +153,8 @@ jobs:
           |---|---|
           | Linux x86_64 | `topowall-x86_64-unknown-linux-gnu.tar.gz` |
           | Linux ARM64 | `topowall-aarch64-unknown-linux-gnu.tar.gz` |
+          | Linux x86_64, musl (Alpine, Void musl, …) | `topowall-x86_64-unknown-linux-musl.tar.gz` |
+          | Linux ARM64, musl | `topowall-aarch64-unknown-linux-musl.tar.gz` |
           | macOS Apple Silicon | `topowall-aarch64-apple-darwin.tar.gz` |
           | macOS Intel | `topowall-x86_64-apple-darwin.tar.gz` |
           | Windows x86_64 | `topowall-x86_64-pc-windows-msvc.zip` |
@@ -120,3 +172,34 @@ jobs:
             --repo "${{ github.repository }}" \
             --title "topowall ${{ github.ref_name }}" \
             --notes-file notes.md
+
+  add-musl:
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build-musl]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Upload musl builds and extend SHA256SUMS
+        run: |
+          repo="${{ github.repository }}"
+          gh release download "$TAG" --repo "$repo" --pattern SHA256SUMS --dir old
+          (cd dist && sha256sum -- *) > musl.sums
+          grep -v -- '-linux-musl.tar.gz' old/SHA256SUMS | cat - musl.sums > SHA256SUMS
+          gh release upload "$TAG" dist/* --repo "$repo"
+          gh release upload "$TAG" SHA256SUMS --repo "$repo" --clobber
+      - name: Add musl rows to the release notes
+        run: |
+          repo="${{ github.repository }}"
+          gh release view "$TAG" --repo "$repo" --json body --jq .body > notes.md
+          if ! grep -q 'linux-musl' notes.md; then
+            awk '{ print } /aarch64-unknown-linux-gnu\.tar\.gz/ {
+              print "| Linux x86_64, musl (Alpine, Void musl, …) | `topowall-x86_64-unknown-linux-musl.tar.gz` |"
+              print "| Linux ARM64, musl | `topowall-aarch64-unknown-linux-musl.tar.gz` |" }' notes.md > new.md
+            gh release edit "$TAG" --repo "$repo" --notes-file new.md
+          fi

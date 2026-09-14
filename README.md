@@ -100,6 +100,20 @@ sudo install topowall-x86_64-unknown-linux-gnu/topowall /usr/local/bin/
 topowall --version
 ```
 
+**musl-based distributions** (Alpine, Void Linux musl, Chimera, postmarketOS)
+use the musl build. It needs `libgcc` and your graphics drivers. On Alpine
+(use `doas` or `sudo`):
+
+```sh
+# Intel graphics; for AMD use mesa-vulkan-ati instead of mesa-vulkan-intel
+doas apk add curl libgcc vulkan-loader mesa-vulkan-intel mesa-dri-gallium mesa-egl
+
+# x86_64 — for ARM64, replace x86_64 with aarch64 in both places
+curl -L https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-x86_64-unknown-linux-musl.tar.gz | tar xz
+doas install topowall-x86_64-unknown-linux-musl/topowall /usr/local/bin/
+topowall --version
+```
+
 ### macOS
 
 Works on Apple Silicon and Intel Macs through Metal.
