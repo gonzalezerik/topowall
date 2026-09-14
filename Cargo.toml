@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/core", "crates/render", "crates/cli"]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 license = "MIT"
 authors = ["Erik Gonzalez <dev@gonzalezerik.com>"]
