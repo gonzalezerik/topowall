@@ -2,11 +2,16 @@
 //!
 //! Skipped when no adapter exists, unless TOPOWALL_REQUIRE_GPU=1 (set in CI).
 //! TOPOWALL_BACKEND / TOPOWALL_GPU pick the adapter, like the CLI.
+//!
+//! All tests share one device and take turns, like a single CLI run. Opening
+//! several devices at once from parallel test threads crashes some software
+//! renderers (seen with WARP on Windows ARM64).
 
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use topowall_core::Heightmap;
 use topowall_render::{Backend, Framing, GpuOptions, Renderer, Theme};
 
-fn renderer() -> Option<Renderer> {
+fn open_renderer() -> Option<Renderer> {
     let opts = GpuOptions {
         backend: Backend::parse(&std::env::var("TOPOWALL_BACKEND").unwrap_or_default()).unwrap(),
         gpu: std::env::var("TOPOWALL_GPU").ok(),
@@ -24,6 +29,14 @@ fn renderer() -> Option<Renderer> {
     }
 }
 
+/// The shared renderer, locked for the duration of one test.
+fn renderer() -> MutexGuard<'static, Option<Renderer>> {
+    static GPU: OnceLock<Mutex<Option<Renderer>>> = OnceLock::new();
+    GPU.get_or_init(|| Mutex::new(open_renderer()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// A west-to-east ramp: elevation = column × 10 m.
 fn ramp() -> Heightmap {
     let (w, h) = (64, 64);
@@ -37,7 +50,8 @@ fn pixel(rgba: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
 
 #[test]
 fn draws_lines_at_the_right_elevations() {
-    let Some(r) = renderer() else { return };
+    let guard = renderer();
+    let Some(r) = guard.as_ref() else { return };
     let theme = Theme::from_toml(
         "background = \"#102030\"\n[[lines]]\nevery = 100\nwidth = 2\ncolor = \"#ffffff\"\n",
     )
@@ -67,7 +81,8 @@ fn draws_lines_at_the_right_elevations() {
 
 #[test]
 fn tiles_large_outputs_seamlessly() {
-    let Some(r) = renderer() else { return };
+    let guard = renderer();
+    let Some(r) = guard.as_ref() else { return };
     let theme = Theme::load("graphite").unwrap().0;
     let hm = ramp();
     let (lo, hi) = hm.min_max();
@@ -83,7 +98,8 @@ fn tiles_large_outputs_seamlessly() {
 
 #[test]
 fn shrinks_heightmaps_that_exceed_the_texture_limit() {
-    let Some(r) = renderer() else { return };
+    let guard = renderer();
+    let Some(r) = guard.as_ref() else { return };
     let max = r.max_texture_size() as usize;
     assert!(r.fit_heightmap(&ramp()).is_none());
     // Only the size decision is checked here; allocating a real over-limit map is too large for CI.
