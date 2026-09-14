@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     time::Instant,
 };
-use topowall_core::{fetch, topo};
+use topowall_core::{atomic, fetch, topo};
 use topowall_render::{
     palette::{self, BackgroundMode, GenerateOptions, Style},
     spacing, Backend, Framing, GpuOptions, Palette, Renderer, Theme,
@@ -251,9 +251,7 @@ fn main() -> Result<()> {
             apply_spacing(&mut theme, &a.colors, None)?;
             let text = theme.to_toml()?;
             match a.output {
-                Some(p) => {
-                    std::fs::write(&p, text).with_context(|| format!("writing {}", p.display()))?
-                }
+                Some(p) => write_text(&p, &text)?,
                 None => print!("{text}"),
             }
             Ok(())
@@ -333,7 +331,7 @@ fn cmd_render(a: RenderArgs) -> Result<()> {
     let (lo, hi) = hm.min_max();
     let resolved = theme.resolve(lo, hi, base.as_deref())?;
     if let Some(p) = &a.save_theme {
-        std::fs::write(p, theme.to_toml()?).with_context(|| format!("writing {}", p.display()))?;
+        write_text(p, &theme.to_toml()?)?;
     }
 
     let t = Instant::now();
@@ -388,26 +386,39 @@ fn cmd_gpus(args: &GpuArgs) -> Result<()> {
     Ok(())
 }
 
-/// Save as PNG, or JPEG when the extension is .jpg/.jpeg.
+/// Save as PNG, or JPEG when the extension is .jpg/.jpeg. The image is encoded
+/// to a temporary file first, so an existing file is only replaced on success.
 fn save_image(path: &Path, w: u32, h: u32, rgba: Vec<u8>, quality: u8) -> Result<()> {
-    let img = image::RgbaImage::from_raw(w, h, rgba).context("pixel buffer size mismatch")?;
-    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase)
         .unwrap_or_default();
-    let result = if ext == "jpg" || ext == "jpeg" {
-        let file = std::fs::File::create(path)?;
-        let enc = image::codecs::jpeg::JpegEncoder::new_with_quality(
-            std::io::BufWriter::new(file),
-            quality,
-        );
-        rgb.write_with_encoder(enc)
-    } else {
-        rgb.save(path)
+    let jpeg = match ext.as_str() {
+        "png" => false,
+        "jpg" | "jpeg" => true,
+        _ => bail!(
+            "unsupported output '{}': use a .png, .jpg or .jpeg file name",
+            path.display()
+        ),
     };
-    result.with_context(|| format!("writing {}", path.display()))
+    let img = image::RgbaImage::from_raw(w, h, rgba).context("pixel buffer size mismatch")?;
+    let rgb = image::DynamicImage::ImageRgba8(img).to_rgb8();
+    atomic::write_file(path, |out| {
+        if jpeg {
+            rgb.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+                out, quality,
+            ))?;
+        } else {
+            rgb.write_with_encoder(image::codecs::png::PngEncoder::new(out))?;
+        }
+        Ok(())
+    })
+}
+
+/// Write a text file, replacing an existing one only on success.
+fn write_text(path: &Path, text: &str) -> Result<()> {
+    atomic::write_file(path, |out| Ok(out.write_all(text.as_bytes())?))
 }
 
 fn cmd_info(input: &Path) -> Result<()> {

@@ -1,6 +1,7 @@
 //! Elevation data for topowall: loading DEM files, fetching open elevation
 //! tiles, resampling, and the `.topo` heightmap format.
 
+pub mod atomic;
 pub mod fetch;
 pub mod formats;
 pub mod heightmap;

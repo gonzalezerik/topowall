@@ -15,7 +15,7 @@
 use crate::{Extent, Heightmap};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::BufWriter, path::Path};
+use std::{fs::File, path::Path};
 
 const KEYWORD: &str = "topowall";
 
@@ -47,14 +47,6 @@ pub fn write(hm: &Heightmap, path: &Path) -> Result<()> {
         source: hm.source.clone(),
     };
 
-    let file = File::create(path).with_context(|| format!("creating {}", path.display()))?;
-    let mut enc = png::Encoder::new(BufWriter::new(file), hm.width as u32, hm.height as u32);
-    enc.set_color(png::ColorType::Grayscale);
-    enc.set_depth(png::BitDepth::Sixteen);
-    enc.set_compression(png::Compression::Best);
-    enc.add_itxt_chunk(KEYWORD.to_string(), serde_json::to_string(&meta)?)?;
-    let mut writer = enc.write_header()?;
-
     let mut bytes = Vec::with_capacity(hm.data.len() * 2);
     for &v in &hm.data {
         let v = if v.is_finite() { v } else { lo };
@@ -63,9 +55,20 @@ pub fn write(hm: &Heightmap, path: &Path) -> Result<()> {
             .clamp(0.0, 65535.0) as u16;
         bytes.extend_from_slice(&q.to_be_bytes());
     }
-    writer.write_image_data(&bytes)?;
-    writer.finish()?;
-    Ok(())
+    let itxt = serde_json::to_string(&meta)?;
+
+    // Replace an existing file only once the whole PNG has been written.
+    crate::atomic::write_file(path, |out| {
+        let mut enc = png::Encoder::new(out, hm.width as u32, hm.height as u32);
+        enc.set_color(png::ColorType::Grayscale);
+        enc.set_depth(png::BitDepth::Sixteen);
+        enc.set_compression(png::Compression::Best);
+        enc.add_itxt_chunk(KEYWORD.to_string(), itxt)?;
+        let mut writer = enc.write_header()?;
+        writer.write_image_data(&bytes)?;
+        writer.finish()?;
+        Ok(())
+    })
 }
 
 pub fn read(path: &Path) -> Result<Heightmap> {
