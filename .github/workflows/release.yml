@@ -54,7 +54,7 @@ jobs:
           case "$TARGET" in *windows*) bin=topowall.exe ;; esac
           cp "target/${TARGET}/release/$bin" "dist/$name/"
           cp LICENSE "dist/$name/"
-          cp crates/render/palettes/LICENSE-tinted-theming "dist/$name/"
+          cp crates/kit/palettes/LICENSE-tinted-theming "dist/$name/"
           cd dist
           if [ "$ARCHIVE" = zip ]; then
             7z a -tzip "$name.zip" "$name" > /dev/null
@@ -105,7 +105,7 @@ jobs:
         run: |
           name="topowall-${TARGET}"
           mkdir -p "dist/$name"
-          cp "target/${TARGET}/release/topowall.exe" LICENSE crates/render/palettes/LICENSE-tinted-theming "dist/$name/"
+          cp "target/${TARGET}/release/topowall.exe" LICENSE crates/kit/palettes/LICENSE-tinted-theming "dist/$name/"
           cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null && rm -rf "$name"
       - uses: actions/upload-artifact@v4
         with:
@@ -147,7 +147,7 @@ jobs:
         run: |
           name="topowall-${TARGET}"
           mkdir -p "dist/$name"
-          cp target/release/topowall LICENSE crates/render/palettes/LICENSE-tinted-theming "dist/$name/"
+          cp target/release/topowall LICENSE crates/kit/palettes/LICENSE-tinted-theming "dist/$name/"
           cd dist && tar czf "$name.tar.gz" "$name" && rm -rf "$name"
       - uses: actions/upload-artifact@v4
         with:

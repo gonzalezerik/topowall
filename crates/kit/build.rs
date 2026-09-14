@@ -1,13 +1,14 @@
-//! Embed the built-in themes as a (name, contents) table.
+//! Embed the vendored base16 schemes as a (name, contents) table.
 
 use std::{env, fs, path::Path};
 
-fn table(dir: &str, ext: &str, out_name: &str) {
+fn main() {
+    let dir = "palettes/base16";
     let mut entries: Vec<_> = fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("reading {dir}: {e}"))
         .filter_map(|e| e.ok())
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == ext))
+        .filter(|p| p.extension().is_some_and(|x| x == "yaml"))
         .collect();
     entries.sort();
 
@@ -21,10 +22,10 @@ fn table(dir: &str, ext: &str, out_name: &str) {
         ));
     }
     src.push(']');
-    fs::write(Path::new(&env::var("OUT_DIR").unwrap()).join(out_name), src).unwrap();
+    fs::write(
+        Path::new(&env::var("OUT_DIR").unwrap()).join("base16.rs"),
+        src,
+    )
+    .unwrap();
     println!("cargo:rerun-if-changed={dir}");
-}
-
-fn main() {
-    table("../../themes", "toml", "themes.rs");
 }

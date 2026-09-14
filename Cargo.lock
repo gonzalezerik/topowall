@@ -1523,7 +1523,20 @@ dependencies = [
  "serde",
  "serde_json",
  "tiff",
+ "topowall-kit",
  "ureq",
+]
+
+[[package]]
+name = "topowall-kit"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "image",
+ "pollster",
+ "serde_json",
+ "toml",
+ "wgpu",
 ]
 
 [[package]]
@@ -1532,12 +1545,11 @@ version = "0.2.1"
 dependencies = [
  "anyhow",
  "bytemuck",
- "image",
  "pollster",
  "serde",
- "serde_json",
  "toml",
  "topowall-core",
+ "topowall-kit",
  "wgpu",
 ]
 

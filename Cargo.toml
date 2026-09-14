@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/render", "crates/cli"]
+members = ["crates/kit", "crates/core", "crates/render", "crates/cli"]
 
 [workspace.package]
 version = "0.2.1"
@@ -10,6 +10,7 @@ authors = ["Erik Gonzalez <dev@gonzalezerik.com>"]
 repository = "https://github.com/gonzalezerik/topowall"
 
 [workspace.dependencies]
+topowall-kit = { path = "crates/kit", default-features = false }
 topowall-core = { path = "crates/core" }
 topowall-render = { path = "crates/render" }
 anyhow = "1"

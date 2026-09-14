@@ -1,0 +1,23 @@
+[package]
+name = "topowall-kit"
+description = "Shared pieces of topowall and streetwall: colors, palettes, GPU selection and safe file writes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[features]
+default = ["gpu", "palette"]
+# GPU adapter discovery and fallback (wgpu).
+gpu = ["dep:wgpu", "dep:pollster"]
+# Color scheme parsing (base16, terminal configs, pywal) and image palettes.
+palette = ["dep:serde_json", "dep:toml", "dep:image"]
+
+[dependencies]
+anyhow.workspace = true
+serde_json = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+wgpu = { workspace = true, optional = true }
+pollster = { workspace = true, optional = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"], optional = true }

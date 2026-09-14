@@ -551,8 +551,9 @@ scripts/web-presets.sh      # regenerate web/studio/presets.json
 Layout:
 
 ```
+crates/kit       shared with streetwall: colors, palettes, GPU selection, safe file writes
 crates/core      elevation readers, tile fetching, resampling, .topo format
-crates/render    wgpu renderer, WGSL shader, themes, palettes, spacing
+crates/render    wgpu renderer, WGSL shader, themes, palette → theme, spacing
 crates/cli       the topowall command
 web/src          color math, color picker, .topo reader, WebGL renderer, theme model
 web/studio       the studio app
@@ -571,7 +572,7 @@ Resolution varies by region: about 10 m in the United States and roughly
 
 Built-in color schemes come from
 [tinted-theming/schemes](https://github.com/tinted-theming/schemes) (MIT); see
-[`crates/render/palettes`](crates/render/palettes).
+[`crates/kit/palettes`](crates/kit/palettes).
 
 ## License
 

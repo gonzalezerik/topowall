@@ -205,10 +205,13 @@ fn resolve_theme(c: &ColorArgs) -> Result<(Theme, Option<PathBuf>)> {
         index_every: 5,
     };
     if let Some(img) = &c.palette_from_image {
-        return Ok((palette::from_image(img, 8)?.to_theme(&opts)?, None));
+        return Ok((
+            palette::to_theme(&palette::from_image(img, 8)?, &opts)?,
+            None,
+        ));
     }
     if let Some(p) = &c.palette {
-        return Ok((Palette::load(p)?.to_theme(&opts)?, None));
+        return Ok((palette::to_theme(&Palette::load(p)?, &opts)?, None));
     }
     Theme::load(c.theme.as_deref().unwrap_or("graphite"))
 }
