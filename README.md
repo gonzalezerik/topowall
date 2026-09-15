@@ -5,7 +5,7 @@ Topographic contour wallpapers from real elevation data, rendered on the GPU.
 Pick any place on Earth, pick your screen resolution, and pick your colors:
 a theme, a terminal color scheme, the dominant colors of a photo, or your own
 shader. Use it from the command line, or in your browser at
-**[gonzalezerik.com/topowall](https://gonzalezerik.com/topowall)**: search any
+**[topography.dev](https://topography.dev)**: search any
 place, pan and zoom a live contour map in your colors, and save a wallpaper.
 
 ![Yosemite Valley in #3f5875 / #87abc0](docs/gallery/yosemite/3f5875-87abc0.jpg)
@@ -153,7 +153,7 @@ about the unsigned program, choose **More info → Run anyway**.
 
 ### Web app
 
-Nothing to install: open [gonzalezerik.com/topowall](https://gonzalezerik.com/topowall).
+Nothing to install: open [topography.dev](https://topography.dev).
 
 To run it yourself, download
 [`topowall-web.zip`](https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-web.zip),
@@ -539,17 +539,17 @@ it contacts only the services shown under **Data sources**:
 
 `scripts/web-dist.sh OUT_DIR` assembles the app into a folder of static files
 that works under any URL path. [`deploy/Containerfile`](deploy/Containerfile)
-builds a small image that serves it at `/topowall/`:
+builds a small image that serves it:
 
 ```sh
 podman build -f deploy/Containerfile -t topowall-web .
 podman run --rm -p 8080:8080 --read-only --tmpfs /tmp --cap-drop ALL topowall-web
-# open http://localhost:8080/topowall/
+# open http://localhost:8080/
 ```
 
 The image runs nginx as a non-root user and needs only a writable `/tmp`
 ([`deploy/nginx.conf`](deploy/nginx.conf)). It keeps no access logs, answers
-only `GET` and `HEAD`, serves nothing outside `/topowall/`, and sends a strict
+only `GET` and `HEAD`, and sends a strict
 Content-Security-Policy and related security headers. `/healthz` returns `ok`
 for health checks.
 

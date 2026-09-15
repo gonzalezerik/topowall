@@ -79,11 +79,11 @@ jobs:
         run: |
           docker run -d --name web --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges -p 8080:8080 topowall-web
           for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 1; done
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/topowall/)" = 200
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/topowall/src/terrain.js)" = 200
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 404
-          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/topowall/)" = 405
-          curl -sI http://127.0.0.1:8080/topowall/ | grep -qi "^content-security-policy: default-src 'self'"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/src/terrain.js)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/nope)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/)" = 405
+          curl -sI http://127.0.0.1:8080/ | grep -qi "^content-security-policy: default-src 'self'"
           docker logs web
 
   musl:
