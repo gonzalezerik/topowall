@@ -11,6 +11,7 @@ use topowall_render::{
     spacing, Backend, Framing, GpuOptions, Palette, Renderer, Theme,
 };
 
+mod picker;
 mod terminal;
 
 #[derive(Parser)]
@@ -38,7 +39,8 @@ enum Command {
     Themes,
     /// List built-in color schemes (for --palette) with a color strip and tags.
     Palettes(PalettesArgs),
-    /// Draw a palette or theme on a map right in the terminal.
+    /// Draw a palette or theme on a map in the terminal. Without a name, browse
+    /// all color schemes with a live preview and pick one with Enter.
     Preview(PreviewArgs),
     /// List the GPUs (and software renderers) topowall can use, best first.
     Gpus {
@@ -84,7 +86,7 @@ enum BackgroundArg {
     Black,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 struct ColorArgs {
     /// Theme file or built-in theme name (see `topowall themes`).
     #[arg(long, conflicts_with_all = ["palette", "palette_from_image"])]
@@ -115,7 +117,7 @@ struct ColorArgs {
     index_every: Option<u32>,
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 struct GpuArgs {
     /// Graphics API: auto, vulkan, metal, dx12 or gl.
     #[arg(long, env = "TOPOWALL_BACKEND", default_value = "auto")]
@@ -180,16 +182,27 @@ struct PalettesArgs {
 
 #[derive(Args)]
 struct PreviewArgs {
-    /// Color scheme or theme: a built-in name, a file, or "random".
+    /// Color scheme or theme: a built-in name, a file, or "random". Leave it out
+    /// to browse all schemes interactively.
     name: Option<String>,
+    /// Browse interactively even when a name is given (it's where the list starts).
+    #[arg(short, long)]
+    interactive: bool,
     #[command(flatten)]
     colors: ColorArgs,
     /// Elevation file to draw instead of the built-in sample (Yosemite Valley).
     #[arg(long)]
     input: Option<PathBuf>,
-    /// Size in terminal cells; each cell shows two pixels stacked.
-    #[arg(long, default_value = "60x30")]
-    size: String,
+    /// Size in terminal cells; each cell shows two pixels stacked (default: 60x30).
+    /// Browsing always fills the terminal.
+    #[arg(long)]
+    size: Option<String>,
+    /// When browsing: render a wallpaper of --input with the scheme you pick.
+    #[arg(short, long, requires = "input")]
+    output: Option<PathBuf>,
+    /// Wallpaper size for --output, e.g. 3840x2160 (default: the elevation file's size).
+    #[arg(long, requires = "output")]
+    wallpaper_size: Option<String>,
     #[command(flatten)]
     gpu: GpuArgs,
 }
@@ -477,7 +490,84 @@ fn cmd_palettes(a: &PalettesArgs) -> Result<()> {
     Ok(())
 }
 
+/// Draws color schemes and themes on one map, small enough for a terminal.
+struct PreviewMap {
+    renderer: Renderer,
+    hm: topowall_core::Heightmap,
+    fitted: Option<topowall_core::Heightmap>,
+    sample: bool,
+}
+
+impl PreviewMap {
+    fn new(input: Option<&Path>, gpu: &GpuArgs) -> Result<Self> {
+        let hm = match input {
+            Some(p) => topowall_core::load(p)?,
+            None => topowall_core::sample(),
+        };
+        let renderer = Renderer::with_options(&gpu.options()?)?;
+        let fitted = renderer.fit_heightmap(&hm);
+        Ok(Self {
+            renderer,
+            hm,
+            fitted,
+            sample: input.is_none(),
+        })
+    }
+
+    /// Render `colors` at `cols` x `rows` cells. Returns the pixels (two rows per
+    /// cell) and the theme as drawn.
+    fn draw(&self, colors: &ColorArgs, cols: usize, rows: usize) -> Result<(Vec<[u8; 3]>, Theme)> {
+        // Render at twice the resolution with twice the line width, then average
+        // each 2x2 block, so lines keep their weight and edges stay smooth.
+        const SS: u32 = 2;
+        let (w, h) = (cols as u32 * SS, rows as u32 * 2 * SS);
+        let hm = &self.hm;
+        // A terminal has few pixels: your own map is shown whole, the sample is
+        // shown at 2x around Yosemite Valley so its lines stay apart.
+        let framing = match (self.sample, hm.m_per_px) {
+            (true, Some(cell)) => {
+                Framing::MetresPerPixel(cell * Framing::Cover.tex_per_px(hm, w, h)? / 2.0)
+            }
+            _ => Framing::Cover,
+        };
+        let (mut theme, base) = resolve_theme(colors)?;
+        let tex_per_px = framing.tex_per_px(hm, w, h)?;
+        if colors.interval.is_none() {
+            let auto = spacing::auto_interval(hm, tex_per_px, 5.0 * SS as f64);
+            theme.set_spacing(auto, colors.index_every)?;
+        } else {
+            apply_spacing(&mut theme, colors, Some((hm, tex_per_px)))?;
+        }
+        let shown = theme.clone();
+        for t in &mut theme.lines {
+            t.width *= SS as f64;
+        }
+        let (lo, hi) = hm.min_max();
+        let resolved = theme.resolve(lo, hi, base.as_deref())?;
+        let pixels =
+            self.renderer
+                .render(self.fitted.as_ref().unwrap_or(hm), &resolved, w, h, framing)?;
+        Ok((
+            terminal::downsample(&pixels, w as usize, h as usize, SS as usize),
+            shown,
+        ))
+    }
+}
+
 fn cmd_preview(mut a: PreviewArgs) -> Result<()> {
+    let browse = a.interactive
+        || (a.name.is_none()
+            && a.colors.theme.is_none()
+            && a.colors.palette.is_none()
+            && a.colors.palette_from_image.is_none()
+            && std::io::stdin().is_terminal()
+            && std::io::stderr().is_terminal());
+    if browse {
+        return cmd_preview_browse(a);
+    }
+    if a.output.is_some() {
+        bail!("--output renders the scheme you pick while browsing; for a named scheme use `topowall render`");
+    }
     if let Some(name) = a.name.take() {
         if a.colors.theme.is_some()
             || a.colors.palette.is_some()
@@ -497,46 +587,15 @@ fn cmd_preview(mut a: PreviewArgs) -> Result<()> {
         }
     }
     pick_random(&mut a.colors);
-    let (cols, rows) = parse_size(&a.size)?;
+    let (cols, rows) = parse_size(a.size.as_deref().unwrap_or("60x30"))?;
     if cols == 0 || rows == 0 || cols > 1000 || rows > 1000 {
         bail!("--size is in terminal cells, e.g. 60x30");
     }
-    let hm = match &a.input {
-        Some(p) => topowall_core::load(p)?,
-        None => topowall_core::sample(),
-    };
-    // Render at twice the resolution with twice the line width, then average
-    // each 2x2 block, so lines keep their weight and edges stay smooth.
-    const SS: u32 = 2;
-    let (w, h) = (cols * SS, rows * 2 * SS);
-    // A terminal has few pixels: your own map is shown whole, the sample is
-    // shown at 2x around Yosemite Valley so its lines stay apart.
-    let framing = match (&a.input, hm.m_per_px) {
-        (None, Some(cell)) => {
-            Framing::MetresPerPixel(cell * Framing::Cover.tex_per_px(&hm, w, h)? / 2.0)
-        }
-        _ => Framing::Cover,
-    };
-    let (mut theme, base) = resolve_theme(&a.colors)?;
-    let tex_per_px = framing.tex_per_px(&hm, w, h)?;
-    if a.colors.interval.is_none() {
-        let auto = spacing::auto_interval(&hm, tex_per_px, 5.0 * SS as f64);
-        theme.set_spacing(auto, a.colors.index_every)?;
-    } else {
-        apply_spacing(&mut theme, &a.colors, Some((&hm, tex_per_px)))?;
-    }
-    for t in &mut theme.lines {
-        t.width *= SS as f64;
-    }
-    let (lo, hi) = hm.min_max();
-    let resolved = theme.resolve(lo, hi, base.as_deref())?;
-    let renderer = Renderer::with_options(&a.gpu.options()?)?;
-    let fitted = renderer.fit_heightmap(&hm);
-    let pixels = renderer.render(fitted.as_ref().unwrap_or(&hm), &resolved, w, h, framing)?;
-    let small = terminal::downsample(&pixels, w as usize, h as usize, SS as usize);
+    let map = PreviewMap::new(a.input.as_deref(), &a.gpu)?;
+    let (pixels, theme) = map.draw(&a.colors, cols as usize, rows as usize)?;
     let mut out = std::io::stdout().lock();
     let _ =
-        out.write_all(terminal::half_blocks(&small, cols as usize, rows as usize * 2).as_bytes());
+        out.write_all(terminal::half_blocks(&pixels, cols as usize, rows as usize * 2).as_bytes());
     let _ = out.flush();
 
     let name = theme.name.as_deref().unwrap_or("theme");
@@ -554,6 +613,94 @@ fn cmd_preview(mut a: PreviewArgs) -> Result<()> {
         }
     );
     Ok(())
+}
+
+/// Color options for a scheme picked while browsing.
+fn picked_colors(base: &ColorArgs, choice: &picker::Choice) -> ColorArgs {
+    let mut colors = base.clone();
+    colors.theme = None;
+    colors.palette_from_image = None;
+    colors.palette = Some(choice.palette.clone());
+    colors.style = match choice.style {
+        picker::Style::Subtle => StyleArg::Subtle,
+        picker::Style::Vivid => StyleArg::Vivid,
+        picker::Style::Mono => StyleArg::Mono,
+    };
+    colors.background = if choice.black_background {
+        BackgroundArg::Black
+    } else {
+        BackgroundArg::Palette
+    };
+    colors
+}
+
+/// Browse every built-in color scheme with a live preview; Enter picks one.
+fn cmd_preview_browse(a: PreviewArgs) -> Result<()> {
+    if a.size.is_some() {
+        bail!("--size is for a single preview; browsing fills the terminal");
+    }
+    if let Some(size) = &a.wallpaper_size {
+        parse_size(size)?;
+    }
+    let style = match a.colors.style {
+        StyleArg::Subtle => picker::Style::Subtle,
+        StyleArg::Vivid => picker::Style::Vivid,
+        StyleArg::Mono => picker::Style::Mono,
+    };
+    let black = matches!(a.colors.background, BackgroundArg::Black);
+    let start = a.name.as_deref().or(a.colors.palette.as_deref());
+    if let Some(name) = start {
+        if palette::builtin_names().all(|n| n != name) {
+            bail!("'{name}' isn't a built-in color scheme; browsing starts at one (see `topowall palettes`)");
+        }
+    }
+    eprintln!("Starting the preview…");
+    let map = PreviewMap::new(a.input.as_deref(), &a.gpu)?;
+    let mut draw = |choice: &picker::Choice, cols: usize, rows: usize| -> Result<Vec<[u8; 3]>> {
+        Ok(map.draw(&picked_colors(&a.colors, choice), cols, rows)?.0)
+    };
+    let Some(choice) = picker::run(start, style, black, &mut draw)? else {
+        return Ok(());
+    };
+
+    let background = if choice.black_background {
+        " --background black"
+    } else {
+        ""
+    };
+    let flags = format!(
+        "--palette {} --style {}{background}",
+        choice.palette,
+        choice.style.name()
+    );
+    match a.output {
+        Some(output) => {
+            eprintln!(
+                "Rendering {} with {flags}",
+                a.input.as_ref().unwrap().display()
+            );
+            let colors = picked_colors(&a.colors, &choice);
+            drop(map);
+            cmd_render(RenderArgs {
+                input: a.input.unwrap(),
+                colors,
+                size: a.wallpaper_size,
+                scale: None,
+                save_theme: None,
+                gpu: a.gpu,
+                quality: 90,
+                output,
+            })
+        }
+        None => {
+            // The flags go to stdout, so `$(topowall preview)` can feed another command.
+            println!("{flags}");
+            if std::io::stdout().is_terminal() {
+                eprintln!("Render it: topowall render <map.topo> {flags} -o wallpaper.png");
+            }
+            Ok(())
+        }
+    }
 }
 
 fn cmd_gpus(args: &GpuArgs) -> Result<()> {
