@@ -47,24 +47,26 @@
       <button class="btn small" id="file-close" type="button">Back to the map</button>
     </div>
 
-    <div class="floating mapctl card" id="zoom" role="group" aria-label="Map controls">
-      <div class="pad">
-        <button type="button" class="pad-up" data-pan="0,-1" aria-label="Move map north">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 15 6-6 6 6"/></svg></button>
-        <button type="button" class="pad-left" data-pan="-1,0" aria-label="Move map west">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 6-6 6 6 6"/></svg></button>
-        <button type="button" class="pad-right" data-pan="1,0" aria-label="Move map east">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></button>
-        <button type="button" class="pad-down" data-pan="0,1" aria-label="Move map south">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button>
+    <div class="floating leftbar" id="leftbar">
+      <div class="mapctl card" id="zoom" role="group" aria-label="Map controls">
+        <div class="pad">
+          <button type="button" class="pad-up" data-pan="0,-1" aria-label="Move map north">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 15 6-6 6 6"/></svg></button>
+          <button type="button" class="pad-left" data-pan="-1,0" aria-label="Move map west">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 6-6 6 6 6"/></svg></button>
+          <button type="button" class="pad-right" data-pan="1,0" aria-label="Move map east">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></button>
+          <button type="button" class="pad-down" data-pan="0,1" aria-label="Move map south">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+        <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+        <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
       </div>
-      <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
-      <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
-    </div>
 
-    <div class="floating readout card" id="readout">
-      <div class="scale"><span id="scale-label"></span><div class="scale-bar" id="scale-bar" aria-hidden="true"></div></div>
-      <span id="cursor"></span>
+      <div class="readout card" id="readout">
+        <div class="scale"><span id="scale-label"></span><div class="scale-bar" id="scale-bar" aria-hidden="true"></div></div>
+        <span id="cursor"></span>
+      </div>
     </div>
   </main>
 
@@ -74,6 +76,15 @@
     </button>
     <div class="panel-scroll" id="panel-scroll">
       <span id="panel-start" tabindex="-1"></span>
+      <section class="group" id="wallpaper-group" aria-labelledby="h-wallpaper">
+        <h2 id="h-wallpaper">Wallpaper</h2>
+        <label class="check"><input type="checkbox" id="show-frame" checked> Show the wallpaper's area</label>
+        <button class="btn primary wide" id="create" type="button" aria-haspopup="dialog">Create wallpaper</button>
+        <button class="btn wide" id="open-file" type="button" aria-describedby="open-file-desc">Open a .topo file</button>
+        <span class="sr-only" id="open-file-desc">A heightmap made with the topowall command-line app.</span>
+        <input type="file" id="file" accept=".topo,image/png" tabindex="-1" aria-hidden="true" hidden>
+      </section>
+
       <section class="group" id="colors-group" aria-labelledby="h-colors">
         <h2 id="h-colors">Colors</h2>
         <button class="scheme-button" id="scheme-button" type="button" aria-haspopup="dialog" aria-describedby="scheme-browse-hint">
@@ -143,7 +154,26 @@
       <section class="group" id="lines-group" aria-labelledby="h-lines">
         <h2 id="h-lines">Lines</h2>
         <span class="frame-readout" id="frame-label" aria-hidden="true"></span>
-        <div class="field">
+        <div class="field" id="wallpaper-size-field">
+          <label for="output-size">Wallpaper size</label>
+          <select id="output-size">
+            <option value="screen">This screen</option>
+            <option value="1920x1080">1920 × 1080</option>
+            <option value="2560x1440">2560 × 1440</option>
+            <option value="2880x1800">2880 × 1800</option>
+            <option value="3840x2160">3840 × 2160 (4K)</option>
+            <option value="5120x2160">5120 × 2160</option>
+            <option value="1206x2622">1206 × 2622 (phone)</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <div class="row" id="custom-size" hidden>
+            <label class="sr-only" for="out-w">Width in pixels</label>
+            <input type="number" id="out-w" min="16" max="16384" value="2880"> <span aria-hidden="true">×</span>
+            <label class="sr-only" for="out-h">Height in pixels</label>
+            <input type="number" id="out-h" min="16" max="16384" value="1800">
+          </div>
+        </div>
+        <div class="field" id="interval-field">
           <div class="field-head">
             <label for="interval-num">Line every (metres)</label>
             <span class="value-edit"><input type="number" id="interval-num" min="0.5" max="1000" step="any"><span aria-hidden="true">m</span></span>
@@ -166,32 +196,6 @@
           <label for="smooth" id="smooth-label">Smoothing</label><input type="range" id="smooth" min="0" max="200" step="0.25" aria-describedby="smooth-desc"><output id="smooth-out" for="smooth" aria-hidden="true"></output>
         </div>
         <span class="sr-only" id="smooth-desc">Smooths small bumps in the elevation data so lines flow.</span>
-      </section>
-
-      <section class="group" id="wallpaper-group" aria-labelledby="h-wallpaper">
-        <h2 id="h-wallpaper">Wallpaper</h2>
-        <label class="sr-only" for="output-size">Wallpaper size</label>
-        <select id="output-size">
-          <option value="screen">This screen</option>
-          <option value="1920x1080">1920 × 1080</option>
-          <option value="2560x1440">2560 × 1440</option>
-          <option value="2880x1800">2880 × 1800</option>
-          <option value="3840x2160">3840 × 2160 (4K)</option>
-          <option value="5120x2160">5120 × 2160</option>
-          <option value="1206x2622">1206 × 2622 (phone)</option>
-          <option value="custom">Custom…</option>
-        </select>
-        <div class="row" id="custom-size" hidden>
-          <label class="sr-only" for="out-w">Width in pixels</label>
-          <input type="number" id="out-w" min="16" max="16384" value="2880"> <span aria-hidden="true">×</span>
-          <label class="sr-only" for="out-h">Height in pixels</label>
-          <input type="number" id="out-h" min="16" max="16384" value="1800">
-        </div>
-        <label class="check"><input type="checkbox" id="show-frame" checked> Show the wallpaper's area</label>
-        <button class="btn primary wide" id="create" type="button" aria-haspopup="dialog">Create wallpaper</button>
-        <button class="btn wide" id="open-file" type="button" aria-describedby="open-file-desc">Open a .topo file</button>
-        <span class="sr-only" id="open-file-desc">A heightmap made with the topowall command-line app.</span>
-        <input type="file" id="file" accept=".topo,image/png" tabindex="-1" aria-hidden="true" hidden>
       </section>
 
     </div>
