@@ -22,6 +22,26 @@ pub fn builtin_names() -> impl Iterator<Item = &'static str> {
     BASE16.iter().map(|(n, _)| *n)
 }
 
+/// The sixteen colors (`base00`..`base0F`) and display title of a built-in scheme.
+pub fn builtin_base16(name: &str) -> Option<([Color; 16], String)> {
+    let (_, text) = BASE16.iter().find(|(n, _)| *n == name)?;
+    let (base, title) = base16_colors(text).ok()?;
+    Some((base, title.unwrap_or_else(|| name.to_string())))
+}
+
+/// A built-in scheme picked at random.
+pub fn random_builtin() -> &'static str {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    h.write_u128(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default(),
+    );
+    BASE16[(h.finish() % BASE16.len() as u64) as usize].0
+}
+
 impl Palette {
     /// Load a palette from a built-in scheme name or a file. The format is
     /// detected from the file name and contents.
@@ -32,10 +52,7 @@ impl Palette {
             if let Some((_, text)) = BASE16.iter().find(|(n, _)| *n == wanted) {
                 return parse_base16(text);
             }
-            let close: Vec<&str> = builtin_names()
-                .filter(|n| n.contains(&wanted))
-                .take(8)
-                .collect();
+            let close = crate::suggest::closest(&wanted, builtin_names(), 5);
             if close.is_empty() {
                 bail!("no palette file or built-in scheme named '{name_or_path}' (see `topowall palettes`)");
             }
@@ -125,7 +142,7 @@ fn yaml_scalar(v: &str) -> &str {
     v.split(" #").next().unwrap_or(v).trim()
 }
 
-fn parse_base16(text: &str) -> Result<Palette> {
+fn base16_colors(text: &str) -> Result<([Color; 16], Option<String>)> {
     let mut base = [None; 16];
     let mut name = None;
     for line in text.lines() {
@@ -145,7 +162,12 @@ fn parse_base16(text: &str) -> Result<Palette> {
     if base.iter().any(Option::is_none) {
         bail!("base16 scheme is missing some of base00..base0F");
     }
-    let b = |i: usize| base[i];
+    Ok((base.map(|c| c.unwrap()), name))
+}
+
+fn parse_base16(text: &str) -> Result<Palette> {
+    let (base, name) = base16_colors(text)?;
+    let b = |i: usize| Some(base[i]);
     // Standard base16 → ANSI mapping.
     let ansi = [
         b(0x0),

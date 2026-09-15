@@ -150,10 +150,22 @@ impl Theme {
         }
         match BUILTIN.iter().find(|(n, _)| *n == name_or_path) {
             Some((_, text)) => Ok((Self::from_toml(text)?, None)),
-            None => bail!(
-                "no theme file or built-in theme named '{name_or_path}' (built-in: {})",
-                Self::builtin_names().collect::<Vec<_>>().join(", ")
-            ),
+            None => {
+                if crate::palette::builtin_names().any(|n| n == name_or_path) {
+                    bail!("'{name_or_path}' is a color scheme, not a theme: use --palette {name_or_path}");
+                }
+                let close = topowall_kit::suggest::closest(name_or_path, Self::builtin_names(), 3);
+                if close.is_empty() {
+                    bail!(
+                        "no theme file or built-in theme named '{name_or_path}' (built-in: {})",
+                        Self::builtin_names().collect::<Vec<_>>().join(", ")
+                    );
+                }
+                bail!(
+                    "no built-in theme '{name_or_path}'; did you mean: {}",
+                    close.join(", ")
+                )
+            }
         }
     }
 

@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::{
-    io::Write,
+    io::{IsTerminal, Write},
     path::{Path, PathBuf},
     time::Instant,
 };
@@ -10,6 +10,8 @@ use topowall_render::{
     palette::{self, BackgroundMode, GenerateOptions, Style},
     spacing, Backend, Framing, GpuOptions, Palette, Renderer, Theme,
 };
+
+mod terminal;
 
 #[derive(Parser)]
 #[command(
@@ -34,8 +36,10 @@ enum Command {
     Info { input: PathBuf },
     /// List built-in themes.
     Themes,
-    /// List built-in color schemes (for --palette).
-    Palettes,
+    /// List built-in color schemes (for --palette) with a color strip and tags.
+    Palettes(PalettesArgs),
+    /// Draw a palette or theme on a map right in the terminal.
+    Preview(PreviewArgs),
     /// List the GPUs (and software renderers) topowall can use, best first.
     Gpus {
         #[command(flatten)]
@@ -153,6 +157,43 @@ struct RenderArgs {
     output: PathBuf,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum ColorWhen {
+    Auto,
+    Always,
+    Never,
+}
+
+#[derive(Args)]
+struct PalettesArgs {
+    /// Only schemes whose name contains this text.
+    search: Option<String>,
+    /// Only schemes with all of these tags, e.g. dark,cool. Tags: dark, light,
+    /// muted, vivid, mono, duo, multi, warm, cool, neutral, and a hue family
+    /// (red, orange, yellow, green, cyan, blue, purple, pink, gray).
+    #[arg(long)]
+    filter: Option<String>,
+    /// Color strips: auto shows them when printing to a terminal (and NO_COLOR is unset).
+    #[arg(long, value_enum, default_value_t = ColorWhen::Auto)]
+    color: ColorWhen,
+}
+
+#[derive(Args)]
+struct PreviewArgs {
+    /// Color scheme or theme: a built-in name, a file, or "random".
+    name: Option<String>,
+    #[command(flatten)]
+    colors: ColorArgs,
+    /// Elevation file to draw instead of the built-in sample (Yosemite Valley).
+    #[arg(long)]
+    input: Option<PathBuf>,
+    /// Size in terminal cells; each cell shows two pixels stacked.
+    #[arg(long, default_value = "60x30")]
+    size: String,
+    #[command(flatten)]
+    gpu: GpuArgs,
+}
+
 #[derive(Args)]
 struct ThemeArgs {
     #[command(flatten)]
@@ -186,6 +227,15 @@ fn cache_dir() -> PathBuf {
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
         .unwrap_or_else(std::env::temp_dir)
         .join("topowall/terrarium")
+}
+
+/// Replace `--palette random` with a built-in scheme, and say which one.
+fn pick_random(c: &mut ColorArgs) {
+    if c.palette.as_deref() == Some("random") {
+        let pick = palette::random_builtin();
+        eprintln!("palette: {pick} (picked at random)");
+        c.palette = Some(pick.to_string());
+    }
 }
 
 /// Pick the theme from --theme / --palette / --palette-from-image (default: graphite).
@@ -249,7 +299,8 @@ fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Fetch(a) => cmd_fetch(a),
         Command::Render(a) => cmd_render(a),
-        Command::Theme(a) => {
+        Command::Theme(mut a) => {
+            pick_random(&mut a.colors);
             let (mut theme, _) = resolve_theme(&a.colors)?;
             apply_spacing(&mut theme, &a.colors, None)?;
             let text = theme.to_toml()?;
@@ -265,10 +316,8 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::Gpus { gpu } => cmd_gpus(&gpu),
-        Command::Palettes => {
-            palette::builtin_names().for_each(|n| println!("{n}"));
-            Ok(())
-        }
+        Command::Palettes(a) => cmd_palettes(&a),
+        Command::Preview(a) => cmd_preview(a),
     }
 }
 
@@ -311,7 +360,8 @@ fn cmd_fetch(a: FetchArgs) -> Result<()> {
     Ok(())
 }
 
-fn cmd_render(a: RenderArgs) -> Result<()> {
+fn cmd_render(mut a: RenderArgs) -> Result<()> {
+    pick_random(&mut a.colors);
     let hm = topowall_core::load(&a.input)?;
     let (w, h) = match &a.size {
         Some(s) => parse_size(s)?,
@@ -363,6 +413,145 @@ fn cmd_render(a: RenderArgs) -> Result<()> {
         renderer.adapter_name(),
         t.elapsed().as_secs_f32(),
         a.output.display()
+    );
+    Ok(())
+}
+
+fn cmd_palettes(a: &PalettesArgs) -> Result<()> {
+    let wanted = a
+        .filter
+        .as_deref()
+        .map(topowall_render::tags::parse_filter)
+        .transpose()?
+        .unwrap_or_default();
+    // Match ignoring case, dashes and spaces, so "rosepine" finds rose-pine.
+    let squash = |s: &str| {
+        s.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect::<String>()
+    };
+    let search = a.search.as_deref().map(squash);
+    let entries: Vec<_> = topowall_render::tags::catalog()
+        .iter()
+        .filter(|e| wanted.iter().all(|t| e.tags.contains(t)))
+        .filter(|e| {
+            search
+                .as_deref()
+                .is_none_or(|s| squash(&e.name).contains(s) || squash(&e.title).contains(s))
+        })
+        .collect();
+    if entries.is_empty() {
+        let hint = a
+            .search
+            .as_deref()
+            .map(|s| topowall_render::suggest::closest(s, palette::builtin_names(), 5))
+            .filter(|c| !c.is_empty())
+            .map(|c| format!("; did you mean: {}", c.join(", ")))
+            .unwrap_or_default();
+        bail!("no color schemes match{hint}");
+    }
+    let color = match a.color {
+        ColorWhen::Always => true,
+        ColorWhen::Never => false,
+        ColorWhen::Auto => {
+            std::io::stdout().is_terminal()
+                && std::env::var_os("NO_COLOR").is_none_or(|v| v.is_empty())
+        }
+    };
+    let width = entries.iter().map(|e| e.name.len()).max().unwrap_or(0);
+    let mut out = std::io::BufWriter::new(std::io::stdout().lock());
+    for e in &entries {
+        let strip = if color {
+            let (base, _) = palette::builtin_base16(&e.name).context("built-in scheme")?;
+            terminal::swatches(&base) + "  "
+        } else {
+            String::new()
+        };
+        // Stop quietly when the reader goes away (e.g. `| head`).
+        if writeln!(out, "{:<width$}  {strip}{}", e.name, e.tags.join(" ")).is_err() {
+            return Ok(());
+        }
+    }
+    let _ = out.flush();
+    Ok(())
+}
+
+fn cmd_preview(mut a: PreviewArgs) -> Result<()> {
+    if let Some(name) = a.name.take() {
+        if a.colors.theme.is_some()
+            || a.colors.palette.is_some()
+            || a.colors.palette_from_image.is_some()
+        {
+            bail!("give the scheme either as a name or with --theme/--palette/--palette-from-image, not both");
+        }
+        let path = Path::new(&name);
+        let is_theme = Theme::builtin_names().any(|n| n == name)
+            || (path.is_file()
+                && path.extension().is_some_and(|e| e == "toml")
+                && std::fs::read_to_string(path).is_ok_and(|t| t.contains("[[lines]]")));
+        if is_theme {
+            a.colors.theme = Some(name);
+        } else {
+            a.colors.palette = Some(name);
+        }
+    }
+    pick_random(&mut a.colors);
+    let (cols, rows) = parse_size(&a.size)?;
+    if cols == 0 || rows == 0 || cols > 1000 || rows > 1000 {
+        bail!("--size is in terminal cells, e.g. 60x30");
+    }
+    let hm = match &a.input {
+        Some(p) => topowall_core::load(p)?,
+        None => topowall_core::sample(),
+    };
+    // Render at twice the resolution with twice the line width, then average
+    // each 2x2 block, so lines keep their weight and edges stay smooth.
+    const SS: u32 = 2;
+    let (w, h) = (cols * SS, rows * 2 * SS);
+    // A terminal has few pixels: your own map is shown whole, the sample is
+    // shown at 2x around Yosemite Valley so its lines stay apart.
+    let framing = match (&a.input, hm.m_per_px) {
+        (None, Some(cell)) => {
+            Framing::MetresPerPixel(cell * Framing::Cover.tex_per_px(&hm, w, h)? / 2.0)
+        }
+        _ => Framing::Cover,
+    };
+    let (mut theme, base) = resolve_theme(&a.colors)?;
+    let tex_per_px = framing.tex_per_px(&hm, w, h)?;
+    if a.colors.interval.is_none() {
+        let auto = spacing::auto_interval(&hm, tex_per_px, 5.0 * SS as f64);
+        theme.set_spacing(auto, a.colors.index_every)?;
+    } else {
+        apply_spacing(&mut theme, &a.colors, Some((&hm, tex_per_px)))?;
+    }
+    for t in &mut theme.lines {
+        t.width *= SS as f64;
+    }
+    let (lo, hi) = hm.min_max();
+    let resolved = theme.resolve(lo, hi, base.as_deref())?;
+    let renderer = Renderer::with_options(&a.gpu.options()?)?;
+    let fitted = renderer.fit_heightmap(&hm);
+    let pixels = renderer.render(fitted.as_ref().unwrap_or(&hm), &resolved, w, h, framing)?;
+    let small = terminal::downsample(&pixels, w as usize, h as usize, SS as usize);
+    let mut out = std::io::stdout().lock();
+    let _ =
+        out.write_all(terminal::half_blocks(&small, cols as usize, rows as usize * 2).as_bytes());
+    let _ = out.flush();
+
+    let name = theme.name.as_deref().unwrap_or("theme");
+    let every = theme.lines.first().map(|t| t.every).unwrap_or(0.0);
+    let how = match (&a.colors.theme, &a.colors.palette) {
+        (Some(t), _) => format!(" --theme {t}"),
+        (_, Some(p)) => format!(" --palette {p}"),
+        _ => String::new(),
+    };
+    eprintln!(
+        "{name} · lines every {every} m · {} · render it: topowall render <map.topo>{how} -o wallpaper.png",
+        match &a.input {
+            Some(p) => p.display().to_string(),
+            None => "Yosemite Valley sample".into(),
+        }
     );
     Ok(())
 }

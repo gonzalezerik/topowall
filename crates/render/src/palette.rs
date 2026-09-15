@@ -1,6 +1,8 @@
 //! Palettes (from topowall-kit) and turning them into contour themes.
 
-pub use topowall_kit::palette::{builtin_names, from_image, Palette};
+pub use topowall_kit::palette::{
+    builtin_base16, builtin_names, from_image, random_builtin, Palette,
+};
 
 use crate::theme::{LineTier, Paint, Theme};
 use anyhow::Result;

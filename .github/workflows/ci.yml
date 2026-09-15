@@ -45,6 +45,9 @@ jobs:
           cargo run --release -p topowall -- gpus
           cargo run --release -p topowall -- render web/studio/assets/yosemite.topo --palette rose-pine --size 640x400 -o smoke.png
           test -s smoke.png
+          cargo run --release -p topowall -- palettes --filter dark,cool --color always
+          cargo run --release -p topowall -- preview rose-pine --size 40x20 > preview.txt
+          test -s preview.txt
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
   web:

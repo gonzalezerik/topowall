@@ -191,7 +191,8 @@ topowall render    Render contours to PNG or JPEG
 topowall theme     Write a theme file from a palette or image
 topowall info      Show details about an elevation file
 topowall themes    List built-in themes
-topowall palettes  List built-in color schemes
+topowall palettes  List built-in color schemes with color strips and tags
+topowall preview   Draw a color scheme or theme on a map in the terminal
 topowall gpus      List the GPUs topowall can use
 ```
 
@@ -321,6 +322,40 @@ Kanagawa:
 ```sh
 topowall render yosemite.topo --palette catppuccin-mocha -o out.png
 ```
+
+**Finding one** in the terminal:
+
+```sh
+topowall palettes                        # every scheme: name, color strip, tags
+topowall palettes rose                   # names containing "rose"
+topowall palettes --filter dark,cool     # schemes with all of these tags
+topowall preview rose-pine               # draw it on a map, right in the terminal
+topowall preview gruvbox-dark-hard --style vivid
+topowall preview nord --input yosemite.topo --size 100x40   # your own map
+topowall render yosemite.topo --palette random -o out.png   # prints which one it picked
+```
+
+`preview` renders the real map with the same GPU renderer as `render`, shrunk
+to terminal cells: each cell is a `▀` whose foreground and background colors
+are two pixels. It needs a terminal with 24-bit color. Without `--input` it
+draws a built-in sample of Yosemite Valley. `--size` is in cells (default
+`60x30`). It takes the same color options as `render`, and the name can be a
+theme too (`topowall preview hypsometric`).
+
+Color strips show when `palettes` prints to a terminal; use `--color always`
+to keep them when piping (e.g. into `less -R`), or `--color never`. Mistyped
+names get suggestions: `--palette catpucin` answers with the four Catppuccin
+flavors.
+
+Tags are computed from each scheme's colors:
+
+| Tag | Meaning |
+|---|---|
+| `dark`, `light` | background lightness |
+| `muted`, `vivid` | average saturation of the accent colors |
+| `mono`, `duo`, `multi` | how far the accent hues spread around the color wheel |
+| `warm`, `cool`, `neutral` | temperature of the background tint |
+| `red` … `pink`, `gray` | hue family of the background tint (`gray` for untinted backgrounds) |
 
 You can also point to your terminal's config, and topowall reads its colors:
 
@@ -545,6 +580,7 @@ python3 -m http.server 8000
 
 cargo build --release
 scripts/gallery.sh          # regenerate docs/gallery
+cargo run -p topowall-kit --example palette-catalog   # regenerate crates/kit/palettes/palettes.json
 scripts/web-presets.sh      # regenerate web/studio/presets.json
 ```
 

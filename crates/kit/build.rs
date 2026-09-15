@@ -10,7 +10,7 @@ fn main() {
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "yaml"))
         .collect();
-    entries.sort();
+    entries.sort_by_key(|p| p.file_stem().map(|s| s.to_os_string()));
 
     let mut src = String::from("&[\n");
     for p in &entries {

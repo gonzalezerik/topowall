@@ -14,6 +14,16 @@ pub use heightmap::{Extent, Heightmap};
 use anyhow::{bail, Result};
 use std::path::Path;
 
+/// The built-in sample terrain: Yosemite Valley, 18 x 11.25 km at 480x300.
+/// `topowall preview` draws it when no elevation file is given.
+pub fn sample() -> Heightmap {
+    topo::read_from(
+        &include_bytes!("../assets/sample.topo")[..],
+        "built-in sample",
+    )
+    .expect("built-in sample terrain is a valid .topo")
+}
+
 /// Load any supported elevation file, picking the reader from the extension.
 ///
 /// Supported: `.topo` (topowall), `.tif`/`.tiff` (GeoTIFF, incl. COG),
@@ -33,5 +43,16 @@ pub fn load(path: &Path) -> Result<Heightmap> {
             "unsupported elevation file '{}' (expected .topo, .tif, .hgt or Terrarium .png)",
             path.display()
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn sample_terrain_loads() {
+        let hm = super::sample();
+        assert_eq!((hm.width, hm.height), (480, 300));
+        let (lo, hi) = hm.min_max();
+        assert!(lo > 1000.0 && hi < 3100.0);
     }
 }

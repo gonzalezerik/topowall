@@ -15,7 +15,7 @@
 use crate::{Extent, Heightmap};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{fs::File, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
 const KEYWORD: &str = "topowall";
 
@@ -73,7 +73,12 @@ pub fn write(hm: &Heightmap, path: &Path) -> Result<()> {
 
 pub fn read(path: &Path) -> Result<Heightmap> {
     let file = File::open(path).with_context(|| format!("opening {}", path.display()))?;
-    let decoder = png::Decoder::new(file);
+    read_from(file, &path.display().to_string())
+}
+
+/// Read a `.topo` from any reader; `label` names it in error messages.
+pub fn read_from(input: impl Read, label: &str) -> Result<Heightmap> {
+    let decoder = png::Decoder::new(std::io::BufReader::new(input));
     let mut reader = decoder.read_info()?;
 
     let meta: TopoMeta = {
@@ -82,13 +87,13 @@ pub fn read(path: &Path) -> Result<Heightmap> {
             .utf8_text
             .iter()
             .find(|c| c.keyword == KEYWORD)
-            .with_context(|| format!("{} is a PNG but has no topowall metadata", path.display()))?;
+            .with_context(|| format!("{label} is a PNG but has no topowall metadata"))?;
         serde_json::from_str(&chunk.get_text()?)?
     };
 
     let info = reader.info();
     if info.color_type != png::ColorType::Grayscale || info.bit_depth != png::BitDepth::Sixteen {
-        bail!("{}: .topo must be 16-bit grayscale", path.display());
+        bail!("{label}: .topo must be 16-bit grayscale");
     }
     let (w, h) = (info.width as usize, info.height as usize);
     let mut buf = vec![0u8; reader.output_buffer_size()];
