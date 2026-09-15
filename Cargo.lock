@@ -1649,7 +1649,7 @@ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 
 [[package]]
 name = "topowall"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1661,7 +1661,7 @@ dependencies = [
 
 [[package]]
 name = "topowall-core"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "png 0.17.16",
@@ -1675,7 +1675,7 @@ dependencies = [
 
 [[package]]
 name = "topowall-kit"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "image",
@@ -1687,7 +1687,7 @@ dependencies = [
 
 [[package]]
 name = "topowall-render"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "bytemuck",

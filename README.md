@@ -198,7 +198,7 @@ topowall theme     Write a theme file from a palette or image
 topowall info      Show details about an elevation file
 topowall themes    List built-in themes
 topowall palettes  List built-in color schemes with color strips and tags
-topowall preview   Draw a color scheme or theme on a map in the terminal
+topowall preview   Draw a color scheme on a map in the terminal, or browse all of them live
 topowall gpus      List the GPUs topowall can use
 ```
 
@@ -332,14 +332,47 @@ topowall render yosemite.topo --palette catppuccin-mocha -o out.png
 **Finding one** in the terminal:
 
 ```sh
+topowall preview                         # browse all 339, live, and pick one
 topowall palettes                        # every scheme: name, color strip, tags
 topowall palettes rose                   # names containing "rose"
 topowall palettes --filter dark,cool     # schemes with all of these tags
-topowall preview rose-pine               # draw it on a map, right in the terminal
+topowall preview rose-pine               # draw one scheme on a map, right in the terminal
 topowall preview gruvbox-dark-hard --style vivid
 topowall preview nord --input yosemite.topo --size 100x40   # your own map
 topowall render yosemite.topo --palette random -o out.png   # prints which one it picked
 ```
+
+**`topowall preview`** with no name opens an interactive browser: the map
+redraws live as you move, so you see the actual contour lines, not just a
+color strip.
+
+![Typing topowall preview, filtering to "gruv", and picking a scheme — the map redraws live the whole time](docs/preview.gif)
+
+| Key | Does |
+|---|---|
+| Type | Filter by name or tag (`dark cool`, `gruv hard`) |
+| `↑` `↓` `PgUp` `PgDn` `Home` `End` | Move through the list |
+| `Tab` | Cycle line style: subtle → vivid → mono |
+| `Shift+Tab` | Toggle black background |
+| `Enter` | Pick it |
+| `Esc` | Clear the filter, then quit |
+
+Picking a scheme prints its flags (`--palette gruvbox-dark-hard --style vivid`)
+to stdout, so it composes with other commands:
+
+```sh
+topowall render yosemite.topo $(topowall preview) -o wallpaper.png
+```
+
+Add `--input map.topo -o wallpaper.png` to render the wallpaper directly from
+whatever you pick, instead of just printing the flags:
+
+```sh
+topowall preview --input yosemite.topo -o wallpaper.png --wallpaper-size 3840x2160
+```
+
+A single named preview (`topowall preview rose-pine`) still works exactly as
+before, and composes the same way:
 
 ![topowall preview in a terminal: rose-pine, gruvbox-dark-hard --style vivid, solarized-light](docs/terminal-preview.png)
 
@@ -347,23 +380,26 @@ topowall render yosemite.topo --palette random -o out.png   # prints which one i
 to terminal cells: each cell is a `▀` whose foreground and background colors
 are two pixels. It needs a terminal with 24-bit color. Without `--input` it
 draws a built-in sample of Yosemite Valley. `--size` is in cells (default
-`60x30`). It takes the same color options as `render`, and the name can be a
-theme too (`topowall preview hypsometric`).
+`60x30`; the interactive browser always fills the terminal). It takes the
+same color options as `render`, and the name can be a theme too
+(`topowall preview hypsometric`).
 
 Color strips show when `palettes` prints to a terminal; use `--color always`
 to keep them when piping (e.g. into `less -R`), or `--color never`. Mistyped
 names get suggestions: `--palette catpucin` answers with the four Catppuccin
 flavors.
 
-Tags are computed from each scheme's colors:
+Tags are computed from each scheme's colors — specifically the ones a map
+actually ends up with, i.e. the background and the line color `--accent auto`
+would pick, not just the palette's raw color list:
 
 | Tag | Meaning |
 |---|---|
 | `dark`, `light` | background lightness |
-| `muted`, `vivid` | average saturation of the accent colors |
-| `mono`, `duo`, `multi` | how far the accent hues spread around the color wheel |
-| `warm`, `cool`, `neutral` | temperature of the background tint |
-| `red` … `pink`, `gray` | hue family of the background tint (`gray` for untinted backgrounds) |
+| `muted`, `vivid` | saturation of the line color |
+| `mono`, `duo`, `multi` | how far the scheme's accent hues spread around the color wheel |
+| `warm`, `cool`, `neutral` | temperature of the line color |
+| `red` … `pink`, `gray` | hue family of the line color (`gray` when it has essentially no hue) |
 
 You can also point to your terminal's config, and topowall reads its colors:
 
@@ -486,8 +522,9 @@ of the CLI's shader, so a wallpaper saved in the browser matches what
 `topowall render` makes from the same settings.
 
 - **Move around:** drag to pan; scroll, pinch or double-click to zoom
-  (Shift+double-click zooms out). The arrow and `+`/`−` buttons beside the map
-  do the same, and so do the arrow keys and `+`/`-` when the map has focus.
+  (Shift+double-click zooms out). The pad and `+`/`−` buttons to the left of
+  the map do the same, and so do the arrow keys and `+`/`-` when the map has
+  focus.
 - **Search:** type coordinates (`37.738, -119.575`, `37°44'17"N 119°34'30"W`)
   to jump straight there, or a place name and press Enter to ask the search
   service. Results zoom to fit the place.
@@ -496,11 +533,15 @@ of the CLI's shader, so a wallpaper saved in the browser matches what
   light, muted, vivid, warm, cool, hue…), and pick **Subtle**, **Vivid** or
   **Mono** lines and the scheme's background or black. Every color in the
   scheme is shown as a swatch: choose **Background**, **Lines** or
-  **Index lines** and click a swatch to use it there. **Fine-tune colors**
-  sets any color, plus each line tier's width and opacity.
+  **Index lines** and click a swatch to use it there.
 
   ![Browsing color schemes filtered to warm ones, previewed on the Grand Canyon](docs/app-colors.jpg)
 
+  **Pick any color** shows a full color wheel for the background and every
+  line tier, always in view — not hidden behind a click. **+ Add color** picks
+  a color of your own and adds it as a swatch; **Remove colors** takes them
+  back out. Doing either to a built-in scheme starts your own copy of it
+  automatically, so nothing you're browsing is ever changed under you.
 - **My themes:** **Save as my theme** keeps the colors on screen, with their
   swatches, as your own theme. Rename it, add or remove swatches, and it saves
   as you go. Themes live in your browser only; **Back up** downloads them as a
@@ -613,8 +654,9 @@ The picker is a standalone web component you can use in other pages:
 </script>
 ```
 
-Attributes: `value`, `alpha` (show opacity), `theme="light|dark"`, and
-`actions` (Apply/Cancel buttons; on by default in the popover). The picker
+Attributes: `value`, `alpha` (show opacity), `theme="light|dark"`,
+`label` (accessible name for the swatch button, e.g. `label="Background color"`),
+and `actions` (Apply/Cancel buttons; on by default in the popover). The picker
 follows the system light/dark setting. A demo is in
 [`web/demo/color-picker.html`](web/demo/color-picker.html).
 
