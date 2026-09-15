@@ -456,7 +456,7 @@ function frameRect() {
   const wide = window.innerWidth > 760;
   const rightInset = wide ? (window.innerWidth - panel.left + 14) * dpr : 0;
   const leftInset = wide ? (pad.right + 14) * dpr : 24 * dpr;
-  const top = (wide ? 78 : pad.bottom + 14) * dpr, bottom = 50 * dpr;
+  const top = (wide ? 100 : pad.bottom + 14) * dpr, bottom = 50 * dpr;
   const availW = Math.max(50, W - rightInset - leftInset - 24 * dpr), availH = Math.max(50, H - top - bottom);
   const s = Math.min(availW / w, availH / h);
   const fw = w * s, fh = h * s;
@@ -477,6 +477,7 @@ function updateFrame() {
   const frame = $("frame");
   if (!state.showFrame || file) {
     frame.hidden = true;
+    $("frame-label").textContent = "";
     return;
   }
   const r = frameRect();

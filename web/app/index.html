@@ -35,7 +35,7 @@
   <main id="main">
     <div class="map" id="map" tabindex="0" role="application" aria-roledescription="map" aria-label="Contour map" aria-describedby="map-help">
       <canvas id="canvas" aria-hidden="true"></canvas>
-      <div class="frame" id="frame" aria-hidden="true" hidden><span class="frame-label" id="frame-label"></span></div>
+      <div class="frame" id="frame" aria-hidden="true" hidden></div>
     </div>
     <p class="sr-only" id="map-help">Arrow keys move the map, plus and minus zoom. The buttons next to the map do the same. The map shows contour lines only; its place, zoom and colors are described in the map status.</p>
     <p class="sr-only" id="map-status" role="status" aria-live="polite"></p>
@@ -142,6 +142,7 @@
 
       <section class="group" id="lines-group" aria-labelledby="h-lines">
         <h2 id="h-lines">Lines</h2>
+        <span class="frame-readout" id="frame-label" aria-hidden="true"></span>
         <div class="field">
           <div class="field-head">
             <label for="interval-num">Line every (metres)</label>
@@ -193,11 +194,17 @@
         <input type="file" id="file" accept=".topo,image/png" tabindex="-1" aria-hidden="true" hidden>
       </section>
 
-      <section class="group" id="sources-group" aria-labelledby="h-sources">
-        <h2 id="h-sources">Data sources</h2>
-        <div class="sources" id="source-summary"></div>
-        <details class="more" id="sources-details">
-          <summary>Change sources</summary>
+    </div>
+  </aside>
+
+  <footer class="floating bottom-bar" id="bottom-bar">
+    <div class="attribution" id="attribution"></div>
+    <section class="sources-inline" id="sources-group" aria-labelledby="h-sources">
+      <h2 id="h-sources" class="sr-only">Data sources</h2>
+      <div class="sources sr-only" id="source-summary"></div>
+      <details class="more" id="sources-details">
+        <summary>Change sources</summary>
+        <div class="popover-body">
           <div class="field">
             <label for="elevation-source">Elevation</label>
             <select id="elevation-source"></select>
@@ -230,14 +237,18 @@
               <div class="hint error" id="search-error" role="alert" hidden></div>
             </div>
           </div>
-        </details>
-        <details class="more">
-          <summary>Accessibility</summary>
+        </div>
+      </details>
+      <details class="more">
+        <summary>Accessibility</summary>
+        <div class="popover-body">
           <p class="hint">topowall is built to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA: everything works with a keyboard and screen readers, the map can be moved and zoomed without dragging, and text and controls keep enough contrast.</p>
           <p class="hint">If something doesn't work for you, please <a href="https://github.com/gonzalezerik/topowall/issues/new?title=Accessibility%3A%20" target="_blank" rel="noopener noreferrer">tell us on GitHub<span class="sr-only"> (opens in a new tab)</span></a>.</p>
-        </details>
-        <details class="more">
-          <summary>Privacy</summary>
+        </div>
+      </details>
+      <details class="more">
+        <summary>Privacy</summary>
+        <div class="popover-body">
           <ul class="privacy">
             <li>No accounts, cookies, analytics or tracking. This site has no server-side code; it only sends these files.</li>
             <li>Maps are drawn on your own device. Your browser downloads elevation tiles directly from the elevation source above, and sends place searches to the search service when you press Enter. Those services see your IP address, as any website does.</li>
@@ -246,12 +257,10 @@
           </ul>
           <button class="btn small" id="forget" type="button" aria-describedby="forget-desc">Forget my settings</button>
           <span class="hint" id="forget-desc">Clears settings and recent colors. Saved themes are kept; delete them from each theme.</span>
-        </details>
-      </section>
-    </div>
-  </aside>
-
-  <footer class="floating attribution" id="attribution"></footer>
+        </div>
+      </details>
+    </section>
+  </footer>
 
   <dialog id="schemes" aria-labelledby="schemes-title">
     <div class="dialog-head">

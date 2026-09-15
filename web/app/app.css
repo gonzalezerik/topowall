@@ -39,8 +39,8 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 .map canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .frame { position: absolute; pointer-events: none; border: 1.5px solid rgba(255, 255, 255, .75); border-radius: 2px;
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .38); }
-.frame-label { position: absolute; left: 0; top: -24px; font: 11.5px var(--mono); color: #fff; background: #000;
-  padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+.frame-readout { font: 11.5px var(--mono); color: var(--muted); white-space: nowrap; }
+.frame-readout:empty { display: none; }
 .progress { position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 30; pointer-events: none; }
 .progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
 .map-error { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 420px; text-align: center;
@@ -92,10 +92,26 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 .readout { left: 14px; bottom: 36px; display: flex; align-items: center; gap: 12px; padding: 5px 10px; font: 11.5px var(--mono); color: var(--text); }
 .scale { display: grid; gap: 2px; }
 .scale-bar { height: 5px; border: 1.5px solid var(--text); border-top: 0; }
-.attribution { left: 0; right: 0; bottom: 0; padding: 5px 14px; font-size: 11.5px; color: #a3a9b3; background: rgb(12, 14, 17);
+.bottom-bar { left: 0; right: 0; bottom: 0; padding: 5px 14px; font-size: 11.5px; color: #a3a9b3; background: rgb(12, 14, 17);
   display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
-.attribution a { color: #c3c8d0; text-decoration: underline; text-underline-offset: 2px; display: inline-block; padding: 4px 0; }
-.attribution a:hover { color: var(--text); }
+.attribution { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+.attribution a, .sources-inline a { color: #c3c8d0; text-decoration: underline; text-underline-offset: 2px; display: inline-block; padding: 4px 0; }
+.attribution a:hover, .sources-inline a:hover { color: var(--text); }
+
+.sources-inline { display: contents; }
+.sources-inline .more { position: relative; margin: 0; }
+.sources-inline .more > summary { color: #a3a9b3; font-size: 11.5px; text-decoration: underline; text-underline-offset: 2px;
+  cursor: pointer; list-style: none; padding: 4px 0; white-space: nowrap; }
+.sources-inline .more > summary::-webkit-details-marker { display: none; }
+.sources-inline .more > summary::before { content: none; }
+.sources-inline .more > summary:hover { color: var(--text); }
+.sources-inline .more[open] > summary { color: var(--text); }
+.sources-inline .more .popover-body {
+  position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 20;
+  width: max-content; max-width: min(380px, calc(100vw - 40px)); max-height: 70vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 16px; display: grid; gap: 10px; font-size: 13px; color: var(--text);
+}
 .banner { left: 50%; top: 14px; transform: translateX(-50%); padding: 7px 8px 7px 14px; display: flex; gap: 10px; align-items: center; }
 
 /* ── Side panel ──────────────────────────────────────────────────────── */
@@ -250,19 +266,24 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   .mapctl { left: 12px; top: 70px; transform: none; }
   .readout { display: none; }
   .searchbar { left: 8px; top: 8px; width: calc(100vw - 16px); }
-  .attribution { font-size: 10.5px; padding: 5px 10px; flex-wrap: nowrap; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .bottom-bar { font-size: 10.5px; padding: 5px 10px; flex-wrap: nowrap; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .sources-inline .more .popover-body { bottom: calc(100% + 6px); }
 }
 
-/* ── Wide screens: colors, wallpaper and sources as separate stacked cards
-   on the right; line spacing as its own bar along the bottom, between the
-   pan/zoom pad and that stack; nothing looks like one big sidebar. ───────── */
-@media (min-width: 761px) {
+/* ── Wide screens: colors and wallpaper as separate stacked cards on the
+   right; line spacing as its own bar along the top, between the search bar
+   and that stack; data sources folded into the bottom attribution strip;
+   nothing looks like one big sidebar. Below this, the search bar, the
+   sidebar and a middle top bar can't all fit side by side, so screens from
+   761 to 1099px keep the plain single sidebar (still with sources folded
+   into the bottom bar, which works at any width). ───────────────────────── */
+@media (min-width: 1100px) {
   .panel { top: 14px; right: 14px; bottom: auto; max-height: calc(100vh - 28px); background: transparent; border: 0; box-shadow: none; }
   .panel-scroll { display: grid; gap: 12px; overflow-y: auto; overflow-x: hidden; padding: 2px; margin: -2px; }
   .panel .group { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); border-bottom: 0; min-width: 0; }
 
   #lines-group {
-    position: fixed; left: 140px; right: 350px; bottom: 14px; top: auto; width: auto;
+    position: fixed; left: 460px; right: 350px; top: 14px; bottom: auto; width: auto;
     display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 22px;
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
   }
