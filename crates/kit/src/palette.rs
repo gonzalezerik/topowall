@@ -167,33 +167,42 @@ fn base16_colors(text: &str) -> Result<([Color; 16], Option<String>)> {
 
 fn parse_base16(text: &str) -> Result<Palette> {
     let (base, name) = base16_colors(text)?;
-    let b = |i: usize| Some(base[i]);
-    // Standard base16 → ANSI mapping.
-    let ansi = [
-        b(0x0),
-        b(0x8),
-        b(0xB),
-        b(0xA),
-        b(0xD),
-        b(0xE),
-        b(0xC),
-        b(0x5),
-        b(0x3),
-        b(0x8),
-        b(0xB),
-        b(0xA),
-        b(0xD),
-        b(0xE),
-        b(0xC),
-        b(0x7),
-    ];
-    Ok(Palette {
-        name,
-        background: b(0x0),
-        foreground: b(0x5),
-        ansi,
-        accents: vec![],
-    })
+    let mut p = Palette::from_base16(&base);
+    p.name = name;
+    Ok(p)
+}
+
+impl Palette {
+    /// A palette from the sixteen colors of a base16 scheme (`base00`..`base0F`).
+    pub fn from_base16(base: &[Color; 16]) -> Palette {
+        let b = |i: usize| Some(base[i]);
+        // Standard base16 → ANSI mapping.
+        let ansi = [
+            b(0x0),
+            b(0x8),
+            b(0xB),
+            b(0xA),
+            b(0xD),
+            b(0xE),
+            b(0xC),
+            b(0x5),
+            b(0x3),
+            b(0x8),
+            b(0xB),
+            b(0xA),
+            b(0xD),
+            b(0xE),
+            b(0xC),
+            b(0x7),
+        ];
+        Palette {
+            name: None,
+            background: b(0x0),
+            foreground: b(0x5),
+            ansi,
+            accents: vec![],
+        }
+    }
 }
 
 fn parse_pywal(v: &serde_json::Value) -> Result<Palette> {

@@ -1,5 +1,6 @@
 //! Tags for the built-in color schemes, computed from their colors:
-//! dark/light, muted/vivid, mono/duo/multi, a hue family and warm/cool.
+//! dark/light, muted/vivid, mono/duo/multi, a hue family and warm/cool, describing
+//! the map each scheme draws.
 //!
 //! The tags ship in `palettes/palettes.json` (written by the `palette-catalog`
 //! example); a test keeps the file in sync with [`compute`].
@@ -28,12 +29,10 @@ pub const ALL: &[&str] = &[
 
 /// Below this OKLCH chroma a color counts as gray.
 const GRAY: f32 = 0.035;
-/// Mean accent chroma at or above this is "vivid" (about half the built-in schemes).
+/// A line color with at least this OKLCH chroma is "vivid".
 const VIVID: f32 = 0.125;
 /// Hues at least this many degrees apart start a new group.
 const HUE_GAP: f32 = 50.0;
-/// A background ramp tinted less than this (mean chroma) is "gray".
-const TINT: f32 = 0.012;
 
 fn family(h: f32) -> &'static str {
     FAMILIES
@@ -46,6 +45,10 @@ fn family(h: f32) -> &'static str {
 
 /// Tags for a base16 scheme (`base00`..`base0F`), in this order:
 /// dark|light, muted|vivid, mono|duo|multi, warm|cool|neutral, hue family.
+///
+/// Tone, saturation and hue describe the map a palette draws: the background,
+/// and the accent color its contour lines are made from (the one `--accent auto`
+/// picks). Variety describes the scheme's whole set of accent colors.
 pub fn compute(base: &[Color; 16]) -> Vec<&'static str> {
     let lch = base.map(|c| c.to_oklch());
     let mut tags = Vec::with_capacity(5);
@@ -53,13 +56,16 @@ pub fn compute(base: &[Color; 16]) -> Vec<&'static str> {
     // Tone: the background.
     tags.push(if lch[0x0].l < 0.5 { "dark" } else { "light" });
 
-    // Saturation: the accents (base08-base0E).
-    let accents = &lch[0x8..=0xE];
-    let mean_c = accents.iter().map(|c| c.c).sum::<f32>() / accents.len() as f32;
-    tags.push(if mean_c >= VIVID { "vivid" } else { "muted" });
+    // Saturation and hue: the line color.
+    let accent = crate::palette::Palette::from_base16(base)
+        .accent("auto")
+        .map(|c| c.to_oklch())
+        .unwrap_or(lch[0x5]);
+    tags.push(if accent.c >= VIVID { "vivid" } else { "muted" });
 
     // Hue variety: how far the colorful accents spread around the hue circle,
     // and how many separate groups they form.
+    let accents = &lch[0x8..=0xE];
     let mut hues: Vec<f32> = accents
         .iter()
         .filter(|c| c.c >= GRAY)
@@ -83,23 +89,17 @@ pub fn compute(base: &[Color; 16]) -> Vec<&'static str> {
         }
     });
 
-    // Hue family: the tint of the background ramp (base00-base07), which
-    // covers most of the screen.
-    let (x, y) = lch[..8].iter().fold((0.0, 0.0), |(x, y), c| {
-        let h = c.h.to_radians();
-        (x + c.c * h.cos(), y + c.c * h.sin())
-    });
-    let dominant = if x.hypot(y) / 8.0 < TINT {
+    let hue = if accent.c < GRAY {
         "gray"
     } else {
-        family(y.atan2(x).to_degrees().rem_euclid(360.0))
+        family(accent.h)
     };
-    tags.push(match dominant {
+    tags.push(match hue {
         "red" | "orange" | "yellow" | "pink" => "warm",
         "gray" => "neutral",
         _ => "cool",
     });
-    tags.push(dominant);
+    tags.push(hue);
     tags
 }
 
