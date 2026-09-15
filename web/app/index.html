@@ -5,88 +5,113 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <title>topowall</title>
+  <title>topowall: contour wallpapers of anywhere</title>
   <meta name="description" content="Topographic contour wallpapers of anywhere on Earth, rendered live in your browser.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="app.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <div class="map" id="map" tabindex="0" aria-label="Contour map. Drag to move, scroll or pinch to zoom, arrow keys to pan, plus and minus to zoom.">
-    <canvas id="canvas"></canvas>
-    <div class="frame" id="frame" hidden><span class="frame-label" id="frame-label"></span></div>
-  </div>
-  <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
-  <div class="map-error" id="map-error" hidden></div>
+  <a class="skip-link" href="#panel-start">Skip to map settings</a>
 
   <header class="floating searchbar card">
+    <h1 class="sr-only">topowall: contour wallpapers of anywhere on Earth</h1>
     <div class="search-row">
-      <a class="brand" href="https://github.com/gonzalezerik/topowall" title="topowall on GitHub"><span class="logo" aria-hidden="true"></span>topowall</a>
-      <form id="search-form" role="search" autocomplete="off">
-        <input id="search" type="search" placeholder="Search a place or coordinates" spellcheck="false"
-          aria-label="Search a place or coordinates" aria-controls="results" aria-expanded="false">
+      <a class="brand" href="https://github.com/gonzalezerik/topowall" target="_blank" rel="noopener noreferrer"><span class="logo" aria-hidden="true"></span>topowall<span class="sr-only"> on GitHub (opens in a new tab)</span></a>
+      <form id="search-form" role="search" autocomplete="off" aria-label="Place search">
+        <input id="search" type="text" inputmode="search" placeholder="Search a place or coordinates" spellcheck="false"
+          role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="results"
+          aria-label="Search a place or coordinates" aria-describedby="search-help">
+        <span class="sr-only" id="search-help">Type coordinates such as 37.738, -119.575 or a place name, then press Enter.</span>
       </form>
       <button class="icon-btn" id="search-go" type="button" aria-label="Search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       </button>
     </div>
     <ul class="results" id="results" role="listbox" aria-label="Search results" hidden></ul>
+    <div class="results-note" id="results-note" role="status" aria-live="polite"></div>
   </header>
 
-  <div class="floating banner card" id="file-banner" hidden>
-    <span id="file-name"></span>
-    <button class="btn small" id="file-close" type="button">Back to the map</button>
-  </div>
+  <main id="main">
+    <div class="map" id="map" tabindex="0" role="application" aria-roledescription="map" aria-label="Contour map" aria-describedby="map-help">
+      <canvas id="canvas" aria-hidden="true"></canvas>
+      <div class="frame" id="frame" aria-hidden="true" hidden><span class="frame-label" id="frame-label"></span></div>
+    </div>
+    <p class="sr-only" id="map-help">Arrow keys move the map, plus and minus zoom. The buttons next to the map do the same. The map shows contour lines only; its place, zoom and colors are described in the map status.</p>
+    <p class="sr-only" id="map-status" role="status" aria-live="polite"></p>
+    <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
+    <div class="map-error" id="map-error" role="alert" hidden></div>
 
-  <div class="floating zoom card" id="zoom">
-    <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
-    <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
-  </div>
+    <div class="floating banner card" id="file-banner" hidden>
+      <span id="file-name"></span>
+      <button class="btn small" id="file-close" type="button">Back to the map</button>
+    </div>
 
-  <div class="floating readout card" id="readout" aria-live="off">
-    <div class="scale"><span id="scale-label"></span><div class="scale-bar" id="scale-bar"></div></div>
-    <span id="cursor"></span>
-  </div>
+    <div class="floating mapctl card" id="zoom" role="group" aria-label="Map controls">
+      <div class="pad">
+        <button type="button" class="pad-up" data-pan="0,-1" aria-label="Move map north">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 15 6-6 6 6"/></svg></button>
+        <button type="button" class="pad-left" data-pan="-1,0" aria-label="Move map west">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 6-6 6 6 6"/></svg></button>
+        <button type="button" class="pad-right" data-pan="1,0" aria-label="Move map east">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></button>
+        <button type="button" class="pad-down" data-pan="0,1" aria-label="Move map south">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button>
+      </div>
+      <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+      <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+    </div>
 
-  <aside class="floating panel card" id="panel" aria-label="Map settings">
-    <button class="panel-toggle" id="panel-toggle" type="button" aria-expanded="true">
-      <span>Colors &amp; wallpaper</span><span aria-hidden="true">▾</span>
+    <div class="floating readout card" id="readout">
+      <div class="scale"><span id="scale-label"></span><div class="scale-bar" id="scale-bar" aria-hidden="true"></div></div>
+      <span id="cursor"></span>
+    </div>
+  </main>
+
+  <aside class="floating panel card" id="panel" aria-labelledby="panel-title">
+    <button class="panel-toggle" id="panel-toggle" type="button" aria-expanded="true" aria-controls="panel-scroll">
+      <span id="panel-title">Colors &amp; wallpaper</span><span aria-hidden="true">▾</span>
     </button>
-    <div class="panel-scroll">
-      <section class="group">
-        <h2>Colors</h2>
-        <button class="scheme-button" id="scheme-button" type="button" aria-haspopup="dialog">
-          <span class="row spread"><span class="name" id="scheme-name"></span><span class="dim">Browse</span></span>
+    <div class="panel-scroll" id="panel-scroll">
+      <span id="panel-start" tabindex="-1"></span>
+      <section class="group" aria-labelledby="h-colors">
+        <h2 id="h-colors">Colors</h2>
+        <button class="scheme-button" id="scheme-button" type="button" aria-haspopup="dialog" aria-describedby="scheme-browse-hint">
+          <span class="row spread"><span class="name" id="scheme-name"></span><span class="dim" id="scheme-browse-hint">Browse colors</span></span>
           <span class="strip" id="scheme-strip" aria-hidden="true"></span>
         </button>
         <div class="field" id="palette-options">
-          <div class="segmented" role="radiogroup" aria-label="Line style" id="style">
-            <button type="button" role="radio" data-value="subtle" title="Soft lines from the scheme's accent">Subtle</button>
-            <button type="button" role="radio" data-value="vivid" title="The accent color as-is">Vivid</button>
-            <button type="button" role="radio" data-value="mono" title="Foreground color only">Mono</button>
+          <span class="dim" id="style-label">Line style</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="style-label" id="style">
+            <button type="button" role="radio" data-value="subtle" aria-describedby="style-subtle-desc">Subtle</button>
+            <button type="button" role="radio" data-value="vivid" aria-describedby="style-vivid-desc">Vivid</button>
+            <button type="button" role="radio" data-value="mono" aria-describedby="style-mono-desc">Mono</button>
           </div>
+          <span class="sr-only" id="style-subtle-desc">Soft lines from the scheme's accent color.</span>
+          <span class="sr-only" id="style-vivid-desc">The accent color as it is.</span>
+          <span class="sr-only" id="style-mono-desc">The scheme's text color only.</span>
           <div class="field-head">
-            <span class="dim">Background</span>
-            <div class="segmented" role="radiogroup" aria-label="Background" id="background-mode">
-              <button type="button" role="radio" data-value="palette" title="The scheme's own background color">Scheme</button>
+            <span class="dim" id="bgmode-label">Background</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="bgmode-label" id="background-mode">
+              <button type="button" role="radio" data-value="palette">Scheme</button>
               <button type="button" role="radio" data-value="black">Black</button>
             </div>
           </div>
         </div>
 
         <div class="field" id="swatch-panel">
-          <span class="dim"><span id="swatch-label">Scheme colors</span>: click one to use it for</span>
-          <div class="segmented small" role="radiogroup" aria-label="Apply a color to" id="swatch-target">
+          <span class="dim" id="swatch-help"><span id="swatch-label">Scheme colors</span>: choose where a color goes, then pick the color</span>
+          <div class="segmented small" role="radiogroup" aria-labelledby="swatch-help" id="swatch-target">
             <button type="button" role="radio" data-value="background">Background</button>
             <button type="button" role="radio" data-value="lines">Lines</button>
             <button type="button" role="radio" data-value="index">Index lines</button>
           </div>
-          <div class="swatches" id="swatches" role="group" aria-label="Colors: click one to apply it"></div>
+          <div class="swatches" id="swatches" role="group" aria-labelledby="swatch-label"></div>
           <div class="row spread" id="swatch-edit-row" hidden>
-            <topo-color-input id="swatch-add" title="Pick a color, then Add"></topo-color-input>
+            <topo-color-input id="swatch-add" label="New color"></topo-color-input>
             <span class="row">
-              <button class="btn small" id="swatch-add-btn" type="button">Add</button>
-              <button class="btn small" id="swatch-edit" type="button" aria-pressed="false" title="Remove colors from this theme">Remove…</button>
+              <button class="btn small" id="swatch-add-btn" type="button">Add color</button>
+              <button class="btn small" id="swatch-edit" type="button" aria-pressed="false">Remove colors</button>
             </span>
           </div>
         </div>
@@ -94,14 +119,14 @@
         <details class="more" id="customize">
           <summary>Fine-tune colors</summary>
           <div class="field">
-            <div class="field-head"><span>Background</span><topo-color-input id="background"></topo-color-input></div>
+            <div class="field-head"><span id="bg-color-label">Background</span><topo-color-input id="background" label="Background color"></topo-color-input></div>
             <div id="tiers" class="field"></div>
           </div>
         </details>
 
         <div class="field" id="mine-options" hidden>
           <div class="field-head">
-            <label for="mine-name">Name</label>
+            <label for="mine-name">Theme name</label>
             <input type="text" id="mine-name" maxlength="60" autocomplete="off" spellcheck="false">
           </div>
           <div class="row spread">
@@ -115,34 +140,37 @@
         </div>
       </section>
 
-      <section class="group">
-        <h2>Lines</h2>
+      <section class="group" aria-labelledby="h-lines">
+        <h2 id="h-lines">Lines</h2>
         <div class="field">
           <div class="field-head">
-            <label for="interval">Line every</label>
-            <span class="value-edit"><input type="number" id="interval-num" min="0.5" max="1000" step="any" aria-label="Metres between lines"> m</span>
+            <label for="interval-num">Line every (metres)</label>
+            <span class="value-edit"><input type="number" id="interval-num" min="0.5" max="1000" step="any"><span aria-hidden="true">m</span></span>
           </div>
           <div class="row">
-            <input type="range" id="interval" min="0" max="1000" step="1" aria-label="Metres between lines (log scale)">
-            <button class="btn small" id="auto" type="button" aria-pressed="true" title="Pick spacing from the terrain and zoom">Auto</button>
+            <input type="range" id="interval" min="0" max="1000" step="1" aria-label="Line spacing">
+            <button class="btn small" id="auto" type="button" aria-pressed="true" aria-describedby="auto-desc">Auto</button>
+            <span class="sr-only" id="auto-desc">Picks the spacing from the terrain and zoom.</span>
           </div>
         </div>
         <div class="field-head">
           <label for="index-every">Index line every</label>
           <span class="stepper">
             <button type="button" class="btn small" id="index-dec" aria-label="Fewer lines per index line">−</button>
-            <input type="number" id="index-every" min="1" max="50" aria-label="Lines per index line">
+            <input type="number" id="index-every" min="1" max="50">
             <button type="button" class="btn small" id="index-inc" aria-label="More lines per index line">+</button>
           </span>
         </div>
-        <label class="slider-row" title="Smooths small bumps in the elevation data so lines flow">
-          <span>Smoothing</span><input type="range" id="smooth" min="0" max="200" step="0.25"><output id="smooth-out"></output>
-        </label>
+        <div class="slider-row">
+          <label for="smooth" id="smooth-label">Smoothing</label><input type="range" id="smooth" min="0" max="200" step="0.25" aria-describedby="smooth-desc"><output id="smooth-out" for="smooth" aria-hidden="true"></output>
+        </div>
+        <span class="sr-only" id="smooth-desc">Smooths small bumps in the elevation data so lines flow.</span>
       </section>
 
-      <section class="group">
-        <h2>Wallpaper</h2>
-        <select id="output-size" aria-label="Wallpaper size">
+      <section class="group" aria-labelledby="h-wallpaper">
+        <h2 id="h-wallpaper">Wallpaper</h2>
+        <label class="sr-only" for="output-size">Wallpaper size</label>
+        <select id="output-size">
           <option value="screen">This screen</option>
           <option value="1920x1080">1920 × 1080</option>
           <option value="2560x1440">2560 × 1440</option>
@@ -153,18 +181,20 @@
           <option value="custom">Custom…</option>
         </select>
         <div class="row" id="custom-size" hidden>
-          <input type="number" id="out-w" min="16" max="16384" value="2880" aria-label="Width in pixels"> ×
-          <input type="number" id="out-h" min="16" max="16384" value="1800" aria-label="Height in pixels">
+          <label class="sr-only" for="out-w">Width in pixels</label>
+          <input type="number" id="out-w" min="16" max="16384" value="2880"> <span aria-hidden="true">×</span>
+          <label class="sr-only" for="out-h">Height in pixels</label>
+          <input type="number" id="out-h" min="16" max="16384" value="1800">
         </div>
         <label class="check"><input type="checkbox" id="show-frame" checked> Show the wallpaper's area</label>
-        <button class="btn primary wide" id="create" type="button">Create wallpaper</button>
-        <label class="btn wide" title="Open a .topo heightmap made with topowall fetch">
-          Open a .topo file<input type="file" id="file" accept=".topo,image/png" hidden>
-        </label>
+        <button class="btn primary wide" id="create" type="button" aria-haspopup="dialog">Create wallpaper</button>
+        <button class="btn wide" id="open-file" type="button" aria-describedby="open-file-desc">Open a .topo file</button>
+        <span class="sr-only" id="open-file-desc">A heightmap made with the topowall command-line app.</span>
+        <input type="file" id="file" accept=".topo,image/png" tabindex="-1" aria-hidden="true" hidden>
       </section>
 
-      <section class="group">
-        <h2>Data sources</h2>
+      <section class="group" aria-labelledby="h-sources">
+        <h2 id="h-sources">Data sources</h2>
         <div class="sources" id="source-summary"></div>
         <details class="more" id="sources-details">
           <summary>Change sources</summary>
@@ -172,29 +202,39 @@
             <label for="elevation-source">Elevation</label>
             <select id="elevation-source"></select>
             <div class="custom-source" id="elevation-custom" hidden>
-              <input type="url" id="elevation-url" placeholder="https://example.com/tiles/{z}/{x}/{y}.png" aria-label="Elevation tile URL">
+              <label for="elevation-url">Tile URL</label>
+              <input type="url" id="elevation-url" placeholder="https://example.com/tiles/{z}/{x}/{y}.png" aria-describedby="elevation-hint elevation-error">
               <div class="row">
-                <select id="elevation-encoding" aria-label="Tile encoding"></select>
-                <input type="number" id="elevation-maxzoom" min="0" max="20" value="15" aria-label="Highest zoom level" title="Highest zoom level">
+                <label class="sr-only" for="elevation-encoding">Tile encoding</label>
+                <select id="elevation-encoding"></select>
+                <label class="sr-only" for="elevation-maxzoom">Highest zoom level</label>
+                <input type="number" id="elevation-maxzoom" min="0" max="20" value="15">
               </div>
-              <div class="hint">256 px PNG tiles in Web Mercator. The server must allow cross-origin requests.</div>
+              <div class="hint" id="elevation-hint">256 px PNG tiles in Web Mercator, with {z}, {x} and {y} in the URL. The server must allow cross-origin requests.</div>
               <button class="btn small" id="elevation-apply" type="button">Use this source</button>
-              <div class="hint error" id="elevation-error" hidden></div>
+              <div class="hint error" id="elevation-error" role="alert" hidden></div>
             </div>
           </div>
           <div class="field">
             <label for="search-source">Place search</label>
             <select id="search-source"></select>
             <div class="custom-source" id="search-custom" hidden>
-              <input type="url" id="search-url" placeholder="https://nominatim.example.com" aria-label="Search service URL">
-              <select id="search-kind" aria-label="Search service type">
+              <label for="search-url">Service URL</label>
+              <input type="url" id="search-url" placeholder="https://nominatim.example.com" aria-describedby="search-error">
+              <label class="sr-only" for="search-kind">Service type</label>
+              <select id="search-kind">
                 <option value="nominatim">Nominatim-compatible</option>
                 <option value="photon">Photon-compatible</option>
               </select>
               <button class="btn small" id="search-apply" type="button">Use this service</button>
-              <div class="hint error" id="search-error" hidden></div>
+              <div class="hint error" id="search-error" role="alert" hidden></div>
             </div>
           </div>
+        </details>
+        <details class="more">
+          <summary>Accessibility</summary>
+          <p class="hint">topowall is built to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at level AA: everything works with a keyboard and screen readers, the map can be moved and zoomed without dragging, and text and controls keep enough contrast.</p>
+          <p class="hint">If something doesn't work for you, please <a href="https://github.com/gonzalezerik/topowall/issues/new?title=Accessibility%3A%20" target="_blank" rel="noopener noreferrer">tell us on GitHub<span class="sr-only"> (opens in a new tab)</span></a>.</p>
         </details>
         <details class="more">
           <summary>Privacy</summary>
@@ -204,7 +244,8 @@
             <li>The place you're looking at is kept in the address after <span class="mono">#</span>, which browsers never send to servers.</li>
             <li>Your settings and the themes you save stay in this browser only. Backups are files you download and open yourself.</li>
           </ul>
-          <button class="btn small" id="forget" type="button" title="Clears settings and recent colors. Saved themes are kept; delete them from each theme.">Forget my settings</button>
+          <button class="btn small" id="forget" type="button" aria-describedby="forget-desc">Forget my settings</button>
+          <span class="hint" id="forget-desc">Clears settings and recent colors. Saved themes are kept; delete them from each theme.</span>
         </details>
       </section>
     </div>
@@ -214,56 +255,63 @@
 
   <dialog id="schemes" aria-labelledby="schemes-title">
     <div class="dialog-head">
-      <h3 id="schemes-title">Colors</h3>
-      <div class="tabs" role="tablist">
-        <button class="btn small" role="tab" id="tab-palettes" type="button" aria-pressed="true">Color schemes</button>
-        <button class="btn small" role="tab" id="tab-themes" type="button" aria-pressed="false">My themes</button>
+      <h2 id="schemes-title">Colors</h2>
+      <div class="tabs" role="tablist" aria-label="Color sets">
+        <button class="btn small" role="tab" id="tab-palettes" type="button" aria-selected="true" aria-controls="scheme-panel">Color schemes</button>
+        <button class="btn small" role="tab" id="tab-themes" type="button" aria-selected="false" aria-controls="scheme-panel" tabindex="-1">My themes</button>
       </div>
       <button class="icon-btn" id="schemes-close" type="button" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </div>
-    <div class="scheme-controls" id="scheme-controls">
-      <div class="row">
-        <input type="text" id="scheme-search" placeholder="Filter by name" autocomplete="off" spellcheck="false" aria-label="Filter by name">
-        <span class="dim" id="scheme-count"></span>
+    <div class="scheme-body" id="scheme-panel" role="tabpanel" aria-labelledby="tab-palettes">
+      <div class="scheme-controls" id="scheme-controls">
+        <div class="row">
+          <label class="sr-only" for="scheme-search">Filter by name</label>
+          <input type="text" id="scheme-search" placeholder="Filter by name" autocomplete="off" spellcheck="false">
+          <span class="dim" id="scheme-count" role="status" aria-live="polite"></span>
+        </div>
+        <div class="tag-groups" id="tag-groups" role="group" aria-label="Filter by tag"></div>
+        <div class="row spread" id="mine-tools" hidden>
+          <span class="hint">Your themes are saved in this browser only. Back them up to move them to another browser.</span>
+          <span class="row">
+            <button class="btn small primary" id="mine-new" type="button">New theme from current colors</button>
+            <button class="btn small" id="mine-export" type="button">Back up</button>
+            <button class="btn small" id="mine-restore" type="button">Restore</button>
+            <input type="file" id="mine-import" accept=".json,application/json" tabindex="-1" aria-hidden="true" hidden>
+          </span>
+        </div>
       </div>
-      <div class="tag-groups" id="tag-groups"></div>
-      <div class="row spread" id="mine-tools" hidden>
-        <span class="hint">Your themes are saved in this browser only. Back them up to move them to another browser.</span>
-        <span class="row">
-          <button class="btn small primary" id="mine-new" type="button">New theme from current colors</button>
-          <button class="btn small" id="mine-export" type="button">Back up</button>
-          <label class="btn small">Restore<input type="file" id="mine-import" accept=".json,application/json" hidden></label>
-        </span>
-      </div>
+      <div class="scheme-grid" id="scheme-grid"></div>
     </div>
-    <div class="scheme-grid" id="scheme-grid"></div>
   </dialog>
 
   <dialog id="export" aria-labelledby="export-title">
     <div class="dialog-head">
-      <h3 id="export-title">Wallpaper</h3>
+      <h2 id="export-title">Wallpaper</h2>
       <button class="icon-btn" id="export-close" type="button" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </div>
     <div class="export-body">
-      <div class="export-preview" id="export-preview"><div class="export-status" id="export-status"></div></div>
+      <div class="export-preview" id="export-preview"></div>
+      <p class="export-status" id="export-status" role="status" aria-live="polite"></p>
       <div class="row">
-        <a class="btn primary" id="download-png" download>Download PNG</a>
+        <a class="btn primary" id="download-png" download hidden>Download PNG</a>
         <button class="btn" id="download-theme" type="button">Download theme.toml</button>
         <span class="dim" id="export-info"></span>
       </div>
       <div class="field">
-        <div class="field-head"><span class="dim">Make the same wallpaper with the command-line app</span>
-          <button class="btn small" id="copy-cli" type="button">Copy</button></div>
-        <pre class="code" id="export-cli"></pre>
+        <div class="field-head"><span class="dim" id="cli-label">Make the same wallpaper with the command-line app</span>
+          <button class="btn small" id="copy-cli" type="button" aria-describedby="cli-label">Copy</button></div>
+        <pre class="code" id="export-cli" tabindex="0" role="region" aria-labelledby="cli-label"></pre>
       </div>
     </div>
   </dialog>
 
-  <div class="drop-hint" id="drop-hint" hidden>Drop a .topo file</div>
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div class="drop-hint" id="drop-hint" aria-hidden="true" hidden>Drop a .topo file</div>
+  <p class="sr-only" id="live" role="status" aria-live="polite"></p>
+  <div class="toast" id="toast" hidden><span id="toast-text" aria-hidden="true"></span><button class="icon-btn toast-close" id="toast-close" type="button" aria-label="Dismiss message">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
 </body>
 </html>

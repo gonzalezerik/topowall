@@ -55,13 +55,41 @@ let file = null;     // { hm, name } when a .topo file is open
 // ── Small helpers ───────────────────────────────────────────────────────────
 
 let toastTimer;
+/** Show a short message. Errors stay until dismissed so there's time to read them. */
 function toast(msg, error = false) {
   const t = $("toast");
-  t.textContent = msg;
+  $("toast-text").textContent = msg;
+  $("live").textContent = "";
+  // Changing the live region's text on the next frame makes screen readers announce repeats too.
+  requestAnimationFrame(() => ($("live").textContent = msg));
   t.classList.toggle("error", error);
   t.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), error ? 6000 : 2000);
+  if (!error) toastTimer = setTimeout(() => (t.hidden = true), 5000);
+}
+
+let announceTimer;
+/** Describe the map for screen readers after it moves (debounced so pans don't flood). */
+function announceView(delay = 700) {
+  clearTimeout(announceTimer);
+  announceTimer = setTimeout(() => {
+    if (file || !state.view) return;
+    $("map-status").textContent = describeView(true);
+  }, delay);
+}
+
+function describeView(withElevation = false) {
+  const { lat, lon, mpp } = state.view;
+  const km = (mpp * canvas.width) / 1000;
+  const ns = lat >= 0 ? "north" : "south", ew = lon >= 0 ? "east" : "west";
+  let text = `Map centered on ${Math.abs(lat).toFixed(4)}° ${ns}, ${Math.abs(lon).toFixed(4)}° ${ew}, ${km < 10 ? km.toFixed(1) : Math.round(km)} kilometres across.`;
+  if (withElevation && built) {
+    const { cx, cy } = viewInHeightmap();
+    const h = builder.elevationAt(built.hm, cx, cy);
+    if (h !== null) text += ` Elevation at the center ${Math.round(h)} metres.`;
+  }
+  text += ` Colors: ${schemeLabel()}${state.custom ? ", changed" : ""}.`;
+  return text;
 }
 
 const fmt = (m) => (Number.isInteger(m) ? `${m}` : `${+m.toFixed(2)}`);
@@ -245,6 +273,7 @@ function writeHash() {
     const s = state.scheme;
     q.set("colors", s.kind === "palette" ? `palette:${s.name}:${state.style}:${state.background}` : `mine:${s.name}`);
     history.replaceState(null, "", `#${q.toString().replaceAll("%2C", ",").replaceAll("%3A", ":")}`);
+    $("map").setAttribute("aria-label", `Contour map. ${describeView()}`);
   }, 250);
 }
 
@@ -324,7 +353,7 @@ async function rebuild() {
     thumbs.invalidate();
     draw();
   } catch (err) {
-    if (abort.signal.aborted || seq !== buildSeq) return;
+    if (abort.signal.aborted || seq !== buildSeq || err.name === "AbortError") return;
     setProgress(1, 1);
     showMapError(err);
   }
@@ -445,7 +474,26 @@ function updateScale() {
 // ── Side panel ──────────────────────────────────────────────────────────────
 
 function setRadio(groupId, value) {
-  for (const b of $(groupId).querySelectorAll("button")) b.setAttribute("aria-checked", String(b.dataset.value === value));
+  for (const b of $(groupId).querySelectorAll("button")) {
+    const on = b.dataset.value === value;
+    b.setAttribute("aria-checked", String(on));
+    b.tabIndex = on ? 0 : -1;
+  }
+}
+
+/** Arrow keys move between options of a role="radiogroup" and select them (ARIA radio group pattern). */
+function wireRadioKeys(group) {
+  group.addEventListener("keydown", (e) => {
+    const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1, Home: "first", End: "last" };
+    if (!(e.key in keys)) return;
+    e.preventDefault();
+    const items = [...group.querySelectorAll('[role="radio"]')].filter((b) => !b.hidden);
+    const i = items.indexOf(document.activeElement);
+    const k = keys[e.key];
+    const next = k === "first" ? items[0] : k === "last" ? items.at(-1) : items[(i + k + items.length) % items.length];
+    next.focus();
+    next.click();
+  });
 }
 
 function syncColorsUI() {
@@ -532,11 +580,13 @@ function renderSwatches() {
   $("swatch-edit").setAttribute("aria-pressed", String(!!mine && removingSwatches));
   const current = targetColor(theme, state.swatchTarget);
   const colors = swatchColors();
+  const targetName = { background: "background", lines: "lines", index: "index lines" }[state.swatchTarget];
   const buttons = colors.map((c) => {
+    const removing = !!mine && removingSwatches;
     const b = el("button", { type: "button", className: "swatch", title: c });
     b.style.background = c;
-    b.setAttribute("aria-label", c);
-    b.setAttribute("aria-pressed", String(sameColor(c, current)));
+    b.setAttribute("aria-label", removing ? `Remove ${c}` : `Use ${c} for ${targetName}`);
+    if (!removing) b.setAttribute("aria-pressed", String(sameColor(c, current)));
     b.addEventListener("click", () => {
       if (mine && removingSwatches) {
         mine.swatches = mine.swatches.filter((x) => !sameColor(x, c));
@@ -555,14 +605,20 @@ function tierLabel(i) {
   return i === 0 ? "Lines" : i === 1 ? "Index lines" : `Tier ${i + 1}`;
 }
 
-function sliderRow(label, min, max, step, value, onInput, format) {
-  const input = el("input", { type: "range", min, max, step, value });
+let fieldId = 0;
+function sliderRow(label, min, max, step, value, onInput, format, accessibleName = label) {
+  const id = `field-${++fieldId}`;
+  const input = el("input", { type: "range", min, max, step, value, id });
+  input.setAttribute("aria-label", accessibleName);
+  input.setAttribute("aria-valuetext", format(+value));
   const out = el("output", { textContent: format(+value) });
+  out.setAttribute("aria-hidden", "true");
   input.addEventListener("input", () => {
     out.textContent = format(+input.value);
+    input.setAttribute("aria-valuetext", format(+input.value));
     onInput(+input.value);
   });
-  return el("label", { className: "slider-row" }, el("span", { textContent: label }), input, out);
+  return el("div", { className: "slider-row" }, el("label", { htmlFor: id, textContent: label }), input, out);
 }
 
 /** The theme to edit: a saved theme directly, or a copy of a built-in scheme's colors. */
@@ -573,9 +629,10 @@ function editable() {
   return state.custom;
 }
 
-function colorInput(value, onInput) {
+function colorInput(value, onInput, label) {
   const c = el("topo-color-input");
   c.setAttribute("alpha", "");
+  if (label) c.setAttribute("label", label);
   c.value = value;
   const handler = () => onInput(c.value);
   c.addEventListener("input", handler);
@@ -587,7 +644,9 @@ function buildTiers(theme) {
   const box = $("tiers");
   box.replaceChildren();
   (theme.lines ?? []).forEach((tier, i) => {
-    const card = el("div", { className: "tier" }, el("div", { className: "tier-title", textContent: tierLabel(i) }));
+    const name = tierLabel(i);
+    const card = el("div", { className: "tier", role: "group" }, el("h3", { className: "tier-title", textContent: name }));
+    card.setAttribute("aria-label", name);
     const update = (fn) => {
       fn(editable().lines[i]);
       colorsChanged();
@@ -595,7 +654,7 @@ function buildTiers(theme) {
     if (Array.isArray(tier.color)) {
       tier.color.forEach((stop, si) => {
         const at = el("input", { type: "text", value: stop.at, className: "at", title: "Elevation in metres, or a percentage like 50%" });
-        at.setAttribute("aria-label", "Color stop position");
+        at.setAttribute("aria-label", `${name} color stop ${si + 1} position, in metres or a percentage`);
         at.addEventListener("change", () => {
           const v = at.value.trim();
           const parsed = /%$/.test(v) ? v : Number.isFinite(parseFloat(v)) ? parseFloat(v) : null;
@@ -605,15 +664,15 @@ function buildTiers(theme) {
           }
           update((t) => (t.color[si].at = parsed));
         });
-        card.append(el("div", { className: "stop" }, colorInput(stop.color, (v) => update((t) => (t.color[si].color = v))), at));
+        card.append(el("div", { className: "stop" }, colorInput(stop.color, (v) => update((t) => (t.color[si].color = v)), `${name} color stop ${si + 1}`), at));
       });
     } else {
       card.append(el("div", { className: "field-head" }, el("span", { className: "dim", textContent: "Color" }),
-        colorInput(tier.color, (v) => update((t) => (t.color = v)))));
+        colorInput(tier.color, (v) => update((t) => (t.color = v)), `${name} color`)));
     }
     card.append(
-      sliderRow("Width", 0.25, 6, 0.05, tier.width ?? 1.25, (v) => update((t) => (t.width = v)), (v) => `${v.toFixed(2)} px`),
-      sliderRow("Opacity", 0, 1, 0.01, tier.opacity ?? 1, (v) => update((t) => (t.opacity = v)), (v) => `${Math.round(v * 100)}%`),
+      sliderRow("Width", 0.25, 6, 0.05, tier.width ?? 1.25, (v) => update((t) => (t.width = v)), (v) => `${v.toFixed(2)} px`, `${name} width`),
+      sliderRow("Opacity", 0, 1, 0.01, tier.opacity ?? 1, (v) => update((t) => (t.opacity = v)), (v) => `${Math.round(v * 100)}%`, `${name} opacity`),
     );
     box.append(card);
   });
@@ -622,6 +681,7 @@ function buildTiers(theme) {
 function syncLinesUI(theme) {
   const base = theme.lines?.[0]?.every ?? state.interval;
   if (document.activeElement !== $("interval")) $("interval").value = metresToSlider(base);
+  $("interval").setAttribute("aria-valuetext", `${fmt(base)} metres${state.auto ? ", automatic" : ""}`);
   if (document.activeElement !== $("interval-num")) $("interval-num").value = fmt(base);
   $("auto").setAttribute("aria-pressed", String(state.auto));
   const n = indexEvery(theme);
@@ -663,7 +723,9 @@ function saveAsMine() {
 
 function renderSources() {
   const e = elevationSource(), s = searchSource();
-  const link = (text, href) => (href ? el("a", { href, textContent: text, target: "_blank", rel: "noopener noreferrer" }) : el("span", { textContent: text }));
+  const link = (text, href) => (href
+    ? el("a", { href, target: "_blank", rel: "noopener noreferrer" }, text, el("span", { className: "sr-only", textContent: " (opens in a new tab)" }))
+    : el("span", { textContent: text }));
   $("source-summary").replaceChildren(
     el("div", { className: "source-line" }, el("b", { textContent: "Elevation" }),
       el("span", {}, link(e.name, e.about), e.custom ? ` (${ENCODINGS[e.encoding].name})` : "", e.datasets ? el("span", { className: "dim", textContent: ` · ${e.datasets}` }) : "")),
@@ -779,7 +841,9 @@ const thumbs = (() => {
 
     const make = (kind, key, title, tags, colors, extra) => {
       const c = el("canvas", { width: TW, height: TH });
+      c.setAttribute("aria-hidden", "true");
       const strip = el("span", { className: "strip small" });
+      strip.setAttribute("aria-hidden", "true");
       fillStrip(strip, colors);
       const button = el("button", { type: "button", className: "scheme-card", title: `Use ${title}` },
         c, strip,
@@ -787,6 +851,7 @@ const thumbs = (() => {
           el("span", { className: "name", textContent: key }),
           el("span", { className: "title", textContent: title }),
           el("span", { className: "tags", textContent: tags.join(" · ") })));
+      button.setAttribute("aria-label", kind === "palette" ? `${key}, ${title}. Tags: ${tags.join(", ")}` : `${title}, saved theme`);
       const card = { kind, key, title, tags, canvas: c, button, painted: -1, ...extra };
       button.addEventListener("click", () => {
         selectScheme(kind, key);
@@ -831,6 +896,15 @@ const thumbs = (() => {
         applyFilter();
       });
     }
+    // Tabs: Left/Right switch tabs (ARIA tabs pattern, automatic activation).
+    $("tab-palettes").parentElement.addEventListener("keydown", (e) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+      e.preventDefault();
+      const next = tab === "palettes" ? $("tab-themes") : $("tab-palettes");
+      const target = e.key === "Home" ? $("tab-palettes") : e.key === "End" ? $("tab-themes") : next;
+      target.focus();
+      target.click();
+    });
   }
 
   function addMineCards() {
@@ -850,6 +924,7 @@ const thumbs = (() => {
       b.querySelector(".name").textContent = t.name;
       b.querySelector(".title").textContent = `${t.swatches.length} colors`;
       b.querySelector(".tags").textContent = "saved in this browser";
+      b.setAttribute("aria-label", `${t.name}, saved theme with ${t.swatches.length} colors`);
       empty.before(b);
     }
   }
@@ -866,8 +941,11 @@ const thumbs = (() => {
       if (inTab) total++;
       if (match) shown++;
     }
-    $("tab-palettes").setAttribute("aria-pressed", String(tab === "palettes"));
-    $("tab-themes").setAttribute("aria-pressed", String(tab === "themes"));
+    for (const [id, name] of [["tab-palettes", "palettes"], ["tab-themes", "themes"]]) {
+      $(id).setAttribute("aria-selected", String(tab === name));
+      $(id).tabIndex = tab === name ? 0 : -1;
+    }
+    $("scheme-panel").setAttribute("aria-labelledby", tab === "palettes" ? "tab-palettes" : "tab-themes");
     $("tag-groups").hidden = tab !== "palettes";
     $("mine-tools").hidden = tab !== "themes";
     $("scheme-count").textContent = `${shown} of ${total}`;
@@ -925,13 +1003,15 @@ function showResults(items, note) {
     const li = el("li", { role: "option", id: `result-${i}` },
       el("span", { className: "r-name", textContent: r.name }),
       el("span", { className: "r-detail", textContent: r.detail || r.kind || "" }));
+    li.setAttribute("aria-selected", "false");
     li.addEventListener("click", () => chooseResult(i));
     return li;
   });
-  if (note) lis.push(el("li", { className: "r-note", textContent: note }));
   list.replaceChildren(...lis);
   list.hidden = lis.length === 0;
+  $("results-note").textContent = note ?? "";
   $("search").setAttribute("aria-expanded", String(!list.hidden));
+  $("search").removeAttribute("aria-activedescendant");
 }
 
 function chooseResult(i) {
@@ -940,6 +1020,7 @@ function chooseResult(i) {
   if (r.bbox) flyToBox(r.bbox, r.lat, r.lon);
   else setView(r.lat, r.lon, state.view.mpp);
   showResults([]);
+  $("map-status").textContent = `Showing ${r.name}${r.detail ? `, ${r.detail}` : ""}. ${describeView()}`;
   $("search").blur();
   $("map").focus({ preventScroll: true });
 }
@@ -951,6 +1032,7 @@ async function runSearch() {
   if (coords) {
     setView(coords.lat, coords.lon, state.view.mpp);
     showResults([]);
+    announceView(300);
     return;
   }
   if (file) closeFile();
@@ -964,7 +1046,9 @@ async function runSearch() {
   showResults([], `Searching ${source.name}…`);
   try {
     const items = await searchPlaces(q, source, { signal: searchAbort.signal, language: navigator.language });
-    showResults(items, items.length ? `Results from ${source.name}` : `No places found by ${source.name}`);
+    showResults(items, items.length
+      ? `${items.length} result${items.length === 1 ? "" : "s"} from ${source.name}. Use the arrow keys and Enter to choose.`
+      : `No places found by ${source.name}`);
   } catch (err) {
     if (err.name !== "AbortError") showResults([], `Search failed (${source.name}): ${err.message}`);
   }
@@ -1002,7 +1086,7 @@ async function createWallpaper() {
   const dialog = $("export");
   const status = $("export-status");
   const preview = $("export-preview");
-  preview.replaceChildren(status);
+  preview.replaceChildren();
   status.textContent = "Downloading elevation…";
   $("download-png").hidden = true;
   $("export-info").textContent = "";
@@ -1085,8 +1169,9 @@ async function createWallpaper() {
     exportUrl = URL.createObjectURL(blob);
     exportBlob = blob;
     exportTheme = theme;
-    const img = el("img", { src: exportUrl, alt: "Wallpaper preview" });
+    const img = el("img", { src: exportUrl, alt: `Preview of the ${w} by ${h} pixel wallpaper: contour lines in ${schemeLabel()} colors` });
     preview.replaceChildren(img);
+    status.textContent = "Your wallpaper is ready to download.";
     const label = currentMine()?.name ?? (state.custom ? "custom" : state.scheme.name);
     const name = `topowall-${label.replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "theme"}-${w}x${h}.png`;
     Object.assign($("download-png"), { href: exportUrl, download: name, hidden: false });
@@ -1195,14 +1280,32 @@ function wireMap() {
     if (keys[e.key]) {
       e.preventDefault();
       panBy(-keys[e.key][0], -keys[e.key][1]);
+      announceView();
     } else if (e.key === "+" || e.key === "=") {
       zoomAt(canvas.width / 2, canvas.height / 2, 0.7);
+      announceView();
     } else if (e.key === "-" || e.key === "_") {
       zoomAt(canvas.width / 2, canvas.height / 2, 1 / 0.7);
+      announceView();
     }
   });
-  $("zoom-in").addEventListener("click", () => zoomAt(canvas.width / 2, canvas.height / 2, 0.5));
-  $("zoom-out").addEventListener("click", () => zoomAt(canvas.width / 2, canvas.height / 2, 2));
+  $("zoom-in").addEventListener("click", () => {
+    zoomAt(canvas.width / 2, canvas.height / 2, 0.5);
+    announceView();
+  });
+  $("zoom-out").addEventListener("click", () => {
+    zoomAt(canvas.width / 2, canvas.height / 2, 2);
+    announceView();
+  });
+  // Buttons that move the map, so it can be panned without dragging.
+  for (const b of document.querySelectorAll("[data-pan]")) {
+    b.addEventListener("click", () => {
+      const [x, y] = b.dataset.pan.split(",").map(Number);
+      const step = Math.min(canvas.width, canvas.height) * 0.25;
+      panBy(-x * step, -y * step);
+      announceView();
+    });
+  }
   new ResizeObserver(() => {
     if (sizeCanvas()) scheduleRebuild(120);
     draw();
@@ -1231,6 +1334,17 @@ function wirePanel() {
   });
   if (window.innerWidth <= 760) $("panel").classList.add("collapsed");
 
+  for (const id of ["style", "background-mode", "swatch-target"]) wireRadioKeys($(id));
+  $("open-file").addEventListener("click", () => $("file").click());
+  $("mine-restore").addEventListener("click", () => $("mine-import").click());
+  $("toast-close").addEventListener("click", () => ($("toast").hidden = true));
+  document.querySelector(".skip-link").addEventListener("click", (e) => {
+    // Handled here: following the link would replace the map's place in the address.
+    e.preventDefault();
+    $("panel").classList.remove("collapsed");
+    $("panel-toggle").setAttribute("aria-expanded", "true");
+    $("panel-start").focus();
+  });
   $("scheme-button").addEventListener("click", () => thumbs.open());
   $("schemes-close").addEventListener("click", () => $("schemes").close());
   $("schemes").addEventListener("click", (e) => {
@@ -1371,7 +1485,10 @@ function wirePanel() {
   $("index-inc").addEventListener("click", () => setIndex(state.indexEvery + 1));
 
   const smooth = $("smooth");
-  const smoothOut = () => ($("smooth-out").textContent = `${fmt(state.smoothM)} m`);
+  const smoothOut = () => {
+    $("smooth-out").textContent = `${fmt(state.smoothM)} m`;
+    smooth.setAttribute("aria-valuetext", `${fmt(state.smoothM)} metres`);
+  };
   smooth.value = state.smoothM;
   smoothOut();
   smooth.addEventListener("input", () => {
@@ -1497,10 +1614,12 @@ function wireSources() {
       const maxZoom = Math.max(0, Math.min(20, Math.round(+$("elevation-maxzoom").value || 15)));
       state.elevation = { id: "custom", url, encoding: $("elevation-encoding").value, maxZoom };
       err.hidden = true;
+      $("elevation-url").removeAttribute("aria-invalid");
       sourcesChanged();
     } catch (e) {
       err.textContent = e.message;
       err.hidden = false;
+      $("elevation-url").setAttribute("aria-invalid", "true");
     }
   });
   sSel.addEventListener("change", () => {
@@ -1516,10 +1635,12 @@ function wireSources() {
       httpsUrl(url);
       state.search = { id: "custom", url, kind: $("search-kind").value };
       err.hidden = true;
+      $("search-url").removeAttribute("aria-invalid");
       sourcesChanged();
     } catch (e) {
       err.textContent = e.message;
       err.hidden = false;
+      $("search-url").setAttribute("aria-invalid", "true");
     }
   });
 }

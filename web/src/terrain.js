@@ -94,8 +94,11 @@ export class TileCache {
     return `${source.url}|${source.encoding}|${z}/${x}/${y}`;
   }
 
-  /** Elevations (metres) of one 256×256 tile. */
-  async get(source, z, x, y, signal) {
+  /**
+   * Elevations (metres) of one 256×256 tile. Downloads are shared between callers
+   * and always finish (the result is cached), so one caller giving up can't fail another.
+   */
+  async get(source, z, x, y) {
     const key = this.#key(source, z, x, y);
     const hit = this.map.get(key);
     if (hit) {
@@ -106,7 +109,7 @@ export class TileCache {
     if (!this.inflight.has(key)) {
       const url = source.url.replace("{z}", z).replace("{x}", x).replace("{y}", y);
       const job = (async () => {
-        const res = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer", signal });
+        const res = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer" });
         if (!res.ok) throw new Error(`${new URL(url).host} answered ${res.status} for tile ${z}/${x}/${y}`);
         const png = await decodePng(await res.arrayBuffer());
         if (png.width !== TILE || png.height !== TILE) throw new Error(`tile ${z}/${x}/${y} is ${png.width}×${png.height}, expected 256×256`);
@@ -142,9 +145,10 @@ export async function loadMosaic(p, source, cache, { signal, onProgress, concurr
   let done = 0, next = 0;
   const worker = async () => {
     while (next < jobs.length) {
+      if (signal?.aborted) throw new DOMException("The map moved before the elevation finished loading", "AbortError");
       const [c, r] = jobs[next++];
       const x = (((p.tx0 + c) % n) + n) % n;
-      const tile = await cache.get(source, p.z, x, p.ty0 + r, signal);
+      const tile = await cache.get(source, p.z, x, p.ty0 + r);
       for (let ty = 0; ty < TILE; ty++) {
         mosaic.set(tile.subarray(ty * TILE, (ty + 1) * TILE), (r * TILE + ty) * mw + c * TILE);
       }

@@ -209,27 +209,27 @@ const TEMPLATE = `
   </div>
 
   <div class="row">
-    <div class="preview" part="preview" title="New color (top) / current color (bottom, click to restore)">
+    <div class="preview" part="preview" aria-hidden="true" title="New color (top) / current color (bottom, click to restore)">
       <div class="checker"><span class="new"></span></div>
       <div class="checker current-wrap"><span class="current"></span></div>
     </div>
     <div class="hex-wrap">
       <label for="hex">Hex</label>
-      <input id="hex" class="hex" spellcheck="false" autocomplete="off" maxlength="9" aria-label="Hex color">
+      <input id="hex" class="hex" spellcheck="false" autocomplete="off" maxlength="9" aria-label="Hex color code">
     </div>
     <button class="icon-btn eyedropper" type="button" title="Pick a color from the screen" aria-label="Eyedropper" hidden>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>
     </button>
   </div>
 
   <div class="fields">
-    <div class="field"><label for="h">H°</label><input id="h" data-ch="h" inputmode="numeric"></div>
-    <div class="field"><label for="s">S%</label><input id="s" data-ch="s" inputmode="numeric"></div>
-    <div class="field"><label for="v">B%</label><input id="v" data-ch="v" inputmode="numeric"></div>
-    <div class="field alpha-field"><label for="a">A%</label><input id="a" data-ch="a" inputmode="numeric"></div>
-    <div class="field"><label for="r">R</label><input id="r" data-ch="r" inputmode="numeric"></div>
-    <div class="field"><label for="g">G</label><input id="g" data-ch="g" inputmode="numeric"></div>
-    <div class="field"><label for="b">B</label><input id="b" data-ch="b" inputmode="numeric"></div>
+    <div class="field"><label for="h">H°</label><input id="h" data-ch="h" inputmode="numeric" aria-label="H°, hue in degrees"></div>
+    <div class="field"><label for="s">S%</label><input id="s" data-ch="s" inputmode="numeric" aria-label="S%, saturation in percent"></div>
+    <div class="field"><label for="v">B%</label><input id="v" data-ch="v" inputmode="numeric" aria-label="B%, brightness in percent"></div>
+    <div class="field alpha-field"><label for="a">A%</label><input id="a" data-ch="a" inputmode="numeric" aria-label="A%, opacity in percent"></div>
+    <div class="field"><label for="r">R</label><input id="r" data-ch="r" inputmode="numeric" aria-label="R, red, 0 to 255"></div>
+    <div class="field"><label for="g">G</label><input id="g" data-ch="g" inputmode="numeric" aria-label="G, green, 0 to 255"></div>
+    <div class="field"><label for="b">B</label><input id="b" data-ch="b" inputmode="numeric" aria-label="B, blue, 0 to 255"></div>
     <div class="field empty"></div>
   </div>
 
@@ -238,7 +238,7 @@ const TEMPLATE = `
     <input id="oklch" class="oklch" spellcheck="false" autocomplete="off" aria-label="OKLCH color">
   </div>
 
-  <div class="swatches" aria-label="Recent colors"></div>
+  <div class="swatches" role="group" aria-label="Recent colors"></div>
 
   <div class="actions">
     <button class="btn cancel" type="button">Cancel</button>
@@ -665,7 +665,7 @@ const INPUT_STYLE = `
 `;
 
 export class TopoColorInput extends HTMLElement {
-  static observedAttributes = ["value", "alpha", "theme"];
+  static observedAttributes = ["value", "alpha", "theme", "label"];
 
   #els = {};
   #onDocPointer = (ev) => {
@@ -731,6 +731,7 @@ export class TopoColorInput extends HTMLElement {
     if (name === "value" && val) this.value = val;
     if (name === "alpha") this.#els.picker.toggleAttribute("alpha", val !== null);
     if (name === "theme") val === null ? this.#els.picker.removeAttribute("theme") : this.#els.picker.setAttribute("theme", val);
+    if (name === "label") this.#sync();
   }
 
   open() {
@@ -784,6 +785,14 @@ export class TopoColorInput extends HTMLElement {
     const hex = this.#els.picker.value;
     this.#els.fill.style.background = hex;
     this.#els.text.textContent = hex;
+    // `label` names what the color is for, e.g. "Background color: #000000".
+    const label = this.getAttribute("label");
+    if (label) {
+      this.#els.trigger.setAttribute("aria-label", `${label}: ${hex}`);
+      this.#els.pop.setAttribute("aria-label", `Choose ${label.toLowerCase()}`);
+    } else {
+      this.#els.trigger.removeAttribute("aria-label");
+    }
   }
 
   #emit(type, detail) {

@@ -535,6 +535,26 @@ it contacts only the services shown under **Data sources**:
 - The page's Content-Security-Policy lets it run only its own scripts and
   styles.
 
+### Accessibility
+
+The web app is built to meet [WCAG 2.2](https://www.w3.org/TR/WCAG22/) level AA:
+
+- Everything works from the keyboard, in a logical order, with a visible focus
+  ring. A skip link jumps to the settings.
+- The map can be moved and zoomed with buttons as well as by dragging,
+  scrolling or pinching, and with the arrow and `+`/`-` keys when it has focus.
+- Screen readers get labeled controls, standard radio group, tab and
+  combobox patterns, and spoken updates of where the map is, its elevation
+  and colors. Every color swatch says what it will be used for.
+- Text and control boundaries keep enough contrast, targets are at least
+  24×24 px, the layout reflows down to 320 px wide, and it respects reduced
+  motion and forced-colors (high contrast) modes.
+
+It's checked with [axe-core](https://github.com/dequelabs/axe-core) in every
+state of the app (no violations) plus keyboard, reflow, text-spacing and
+target-size checks. Please
+[report anything that gets in your way](https://github.com/gonzalezerik/topowall/issues/new?title=Accessibility%3A%20).
+
 ### Hosting the web app
 
 `scripts/web-dist.sh OUT_DIR` assembles the app into a folder of static files
