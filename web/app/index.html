@@ -74,7 +74,7 @@
     </button>
     <div class="panel-scroll" id="panel-scroll">
       <span id="panel-start" tabindex="-1"></span>
-      <section class="group" aria-labelledby="h-colors">
+      <section class="group" id="colors-group" aria-labelledby="h-colors">
         <h2 id="h-colors">Colors</h2>
         <button class="scheme-button" id="scheme-button" type="button" aria-haspopup="dialog" aria-describedby="scheme-browse-hint">
           <span class="row spread"><span class="name" id="scheme-name"></span><span class="dim" id="scheme-browse-hint">Browse colors</span></span>
@@ -140,7 +140,7 @@
         </div>
       </section>
 
-      <section class="group" aria-labelledby="h-lines">
+      <section class="group" id="lines-group" aria-labelledby="h-lines">
         <h2 id="h-lines">Lines</h2>
         <div class="field">
           <div class="field-head">
@@ -167,7 +167,7 @@
         <span class="sr-only" id="smooth-desc">Smooths small bumps in the elevation data so lines flow.</span>
       </section>
 
-      <section class="group" aria-labelledby="h-wallpaper">
+      <section class="group" id="wallpaper-group" aria-labelledby="h-wallpaper">
         <h2 id="h-wallpaper">Wallpaper</h2>
         <label class="sr-only" for="output-size">Wallpaper size</label>
         <select id="output-size">
@@ -193,7 +193,7 @@
         <input type="file" id="file" accept=".topo,image/png" tabindex="-1" aria-hidden="true" hidden>
       </section>
 
-      <section class="group" aria-labelledby="h-sources">
+      <section class="group" id="sources-group" aria-labelledby="h-sources">
         <h2 id="h-sources">Data sources</h2>
         <div class="sources" id="source-summary"></div>
         <details class="more" id="sources-details">
