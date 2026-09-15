@@ -475,16 +475,22 @@ function frameRect() {
   const W = canvas.width, H = canvas.height;
   const { w, h } = outputSize();
   const panel = $("panel").getBoundingClientRect();
+  const zoomEl = $("zoom").getBoundingClientRect();
   const dpr = W / canvas.clientWidth;
-  // Keep clear of the side panel (right-of-map on every width) and the top
-  // bar + status strip; zoom and the scale strip are small corner overlays
-  // that don't need their own clearance.
+  // Keep clear of the panel and the zoom stack using their *actual* current
+  // position, not a guessed flat margin: on wide screens the panel sits
+  // right-of-map (and can be any height), so exclude from its left edge; on
+  // narrow screens it's a bottom sheet that can be collapsed or expanded to
+  // most of the screen, so exclude from its top edge instead, and also clear
+  // the zoom stack's own corner (top-right on narrow, bottom-right on wide,
+  // where it already sits inside the panel's excluded band).
   const wide = window.innerWidth > 760;
-  const rightInset = wide ? (window.innerWidth - panel.left + 14) * dpr : 0;
+  const rightInset = wide
+    ? (window.innerWidth - panel.left + 14) * dpr
+    : (window.innerWidth - zoomEl.left + 10) * dpr;
   const leftInset = 24 * dpr;
-  // The bottom margin has to clear the taller of the zoom stack (bottom-right,
-  // ~130px including its own gap above the footer) and the footer itself.
-  const top = (wide ? 100 : 70) * dpr, bottom = (wide ? 140 : 60) * dpr;
+  const top = (wide ? 100 : 70) * dpr;
+  const bottom = wide ? 140 * dpr : (window.innerHeight - panel.top + 10) * dpr;
   const availW = Math.max(50, W - rightInset - leftInset - 24 * dpr), availH = Math.max(50, H - top - bottom);
   const s = Math.min(availW / w, availH / h);
   const fw = w * s, fh = h * s;
@@ -591,7 +597,7 @@ function layoutTopbar() {
   const w = window.innerWidth;
   const popover = $("contours-popover"), btn = $("contours-btn"), inline = $("tb-controls");
   const groups = [
-    { el: $("wallpaper-size-field"), toPopover: w <= 760 },
+    { el: $("wallpaper-size-field"), toPopover: w <= 930 },
     { el: $("interval-field"), toPopover: w <= 760 },
     { el: $("index-field-tb"), toPopover: w <= 1279 },
     { el: $("smooth-field-tb"), toPopover: w <= 1279 },
@@ -1537,6 +1543,9 @@ function wirePanel() {
   $("panel-toggle").addEventListener("click", () => {
     const collapsed = $("panel").classList.toggle("collapsed");
     $("panel-toggle").setAttribute("aria-expanded", String(!collapsed));
+    // The panel's own height changes (it's a bottom sheet on narrow screens),
+    // which is one of the things the wallpaper frame keeps clear of.
+    updateFrame();
   });
   if (window.innerWidth <= 760) $("panel").classList.add("collapsed");
 
