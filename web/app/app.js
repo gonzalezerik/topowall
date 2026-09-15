@@ -1744,7 +1744,6 @@ async function init() {
     }
   });
   rebuild();
-  $("map").focus({ preventScroll: true });
   // Hooks for the browser tests (web/test).
   window.__topowall = { state, get built() { return built; }, get exportBlob() { return exportBlob; }, rebuild, draw: drawNow };
 }

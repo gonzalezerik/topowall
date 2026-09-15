@@ -155,7 +155,7 @@ about the unsigned program, choose **More info → Run anyway**.
 
 Nothing to install: open [topography.dev](https://topography.dev).
 
-To run it yourself, download
+To run it yourself, download (releases from v0.2.2 on)
 [`topowall-web.zip`](https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-web.zip),
 extract it, and serve the folder with any static file server. With Python:
 
@@ -341,6 +341,8 @@ topowall preview nord --input yosemite.topo --size 100x40   # your own map
 topowall render yosemite.topo --palette random -o out.png   # prints which one it picked
 ```
 
+![topowall preview in a terminal: rose-pine, gruvbox-dark-hard --style vivid, solarized-light](docs/terminal-preview.png)
+
 `preview` renders the real map with the same GPU renderer as `render`, shrunk
 to terminal cells: each cell is a `▀` whose foreground and background colors
 are two pixels. It needs a terminal with 24-bit color. Without `--input` it
@@ -476,7 +478,7 @@ Yellowstone's plateau and 100 m for the Grand Canyon.
 
 ## Web app guide
 
-![topowall web app](docs/app.jpg)
+![The topowall web app: Yosemite Valley in Rosé Pine, with the scheme's colors as swatches](docs/app.jpg)
 
 The web app draws contour maps of anywhere on Earth, live, on your own device
 (WebGL2). It builds elevation the same way as `topowall fetch` and uses a port
@@ -484,8 +486,8 @@ of the CLI's shader, so a wallpaper saved in the browser matches what
 `topowall render` makes from the same settings.
 
 - **Move around:** drag to pan; scroll, pinch or double-click to zoom
-  (Shift+double-click zooms out). With the map focused, arrow keys pan and
-  `+`/`-` zoom.
+  (Shift+double-click zooms out). The arrow and `+`/`−` buttons beside the map
+  do the same, and so do the arrow keys and `+`/`-` when the map has focus.
 - **Search:** type coordinates (`37.738, -119.575`, `37°44'17"N 119°34'30"W`)
   to jump straight there, or a place name and press Enter to ask the search
   service. Results zoom to fit the place.
@@ -496,6 +498,9 @@ of the CLI's shader, so a wallpaper saved in the browser matches what
   scheme is shown as a swatch: choose **Background**, **Lines** or
   **Index lines** and click a swatch to use it there. **Fine-tune colors**
   sets any color, plus each line tier's width and opacity.
+
+  ![Browsing color schemes filtered to warm ones, previewed on the Grand Canyon](docs/app-colors.jpg)
+
 - **My themes:** **Save as my theme** keeps the colors on screen, with their
   swatches, as your own theme. Rename it, add or remove swatches, and it saves
   as you go. Themes live in your browser only; **Back up** downloads them as a
