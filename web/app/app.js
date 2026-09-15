@@ -106,6 +106,16 @@ function el(tag, props = {}, ...children) {
   return e;
 }
 
+function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+const isTypingTarget = (t) => ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable;
+
 const store = {
   load() {
     try {
@@ -116,8 +126,8 @@ const store = {
   },
   save() {
     try {
-      const { scheme, style, background, custom, swatchTarget, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search } = state;
-      localStorage.setItem(STORE_KEY, JSON.stringify({ scheme, style, background, custom, swatchTarget, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search }));
+      const { scheme, style, background, custom, swatchTarget, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search, view } = state;
+      localStorage.setItem(STORE_KEY, JSON.stringify({ scheme, style, background, custom, swatchTarget, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search, view }));
     } catch {
       /* storage unavailable */
     }
@@ -262,6 +272,9 @@ function readHash() {
     const [kind, name, style, background] = c.split(":");
     if ((kind === "palette" || kind === "mine") && name) out.colors = { kind, name, style, background };
   }
+  const line = q.get("line");
+  if (line === "auto") out.line = { auto: true };
+  else if (line && Number.isFinite(parseFloat(line))) out.line = { auto: false, interval: parseFloat(line) };
   return out;
 }
 
@@ -269,12 +282,14 @@ let hashTimer;
 function writeHash() {
   clearTimeout(hashTimer);
   hashTimer = setTimeout(() => {
+    store.save(); // also remembers the last place, so a plain reload (no link) restores it too
     if (file) return;
     const { lat, lon, mpp } = state.view;
     const q = new URLSearchParams();
     q.set("at", `${lat.toFixed(5)},${lon.toFixed(5)},${+mpp.toPrecision(4)}`);
     const s = state.scheme;
     q.set("colors", s.kind === "palette" ? `palette:${s.name}:${state.style}:${state.background}` : `mine:${s.name}`);
+    q.set("line", state.auto ? "auto" : fmt(state.interval));
     history.replaceState(null, "", `#${q.toString().replaceAll("%2C", ",").replaceAll("%3A", ":")}`);
     $("map").setAttribute("aria-label", `Contour map. ${describeView()}`);
   }, 250);
@@ -338,6 +353,9 @@ async function rebuild() {
   const w = Math.min(max, Math.round(W * MARGIN)), h = Math.min(max, Math.round(H * MARGIN));
   const { lat, lon } = state.view;
   const source = elevationSource();
+  // Only the very first load shows a blocking spinner; quiet background
+  // rebuilds (panning, zooming) shouldn't interrupt an already-visible map.
+  if (!built) $("map-loading").hidden = false;
   try {
     const mercPerPx = mercPerDevPx();
     let p = planView({ lat, lon, mercPerPx, widthPx: w, heightPx: h, maxZoom: source.maxZoom ?? 15 });
@@ -354,6 +372,7 @@ async function rebuild() {
     built = { plan: p, hm: { ...hm, min: summary.min, max: summary.max }, summary, W, H };
     renderer.setHeightTexture(built.hm);
     $("map-error").hidden = true;
+    $("map-loading").hidden = true;
     buildFailures = 0;
     thumbs.invalidate();
     draw();
@@ -367,6 +386,7 @@ async function rebuild() {
       scheduleRebuild(500 * 2 ** buildFailures);
       return;
     }
+    $("map-loading").hidden = true;
     showMapError(err);
   }
 }
@@ -440,27 +460,38 @@ function outputSize() {
     const dpr = window.devicePixelRatio || 1;
     return { w: Math.round(screen.width * dpr), h: Math.round(screen.height * dpr) };
   }
+  // Preset option values are literally "widthxheight" (see the <select> in index.html);
+  // only "custom" needs the separate width/height fields.
+  const preset = /^(\d+)x(\d+)$/.exec(o.choice);
+  if (preset) return { w: +preset[1], h: +preset[2] };
   return { w: o.w, h: o.h };
 }
+
+/** How far the visitor has dragged the wallpaper frame off-center, in device pixels. */
+let frameOffset = { dx: 0, dy: 0 };
 
 /** The part of the screen the wallpaper covers, in device pixels. */
 function frameRect() {
   const W = canvas.width, H = canvas.height;
   const { w, h } = outputSize();
   const panel = $("panel").getBoundingClientRect();
-  const pad = $("zoom").getBoundingClientRect();
   const dpr = W / canvas.clientWidth;
-  // Keep clear of the side panel and the pan/zoom control: the panel sits
-  // right-of-map on every width; the pad sits left-of-map (vertically
-  // centered) on wide screens, or top-of-map on narrow ones (see app.css).
+  // Keep clear of the side panel (right-of-map on every width) and the top
+  // bar + status strip; zoom and the scale strip are small corner overlays
+  // that don't need their own clearance.
   const wide = window.innerWidth > 760;
   const rightInset = wide ? (window.innerWidth - panel.left + 14) * dpr : 0;
-  const leftInset = wide ? (pad.right + 14) * dpr : 24 * dpr;
-  const top = (wide ? 140 : pad.bottom + 14) * dpr, bottom = 50 * dpr;
+  const leftInset = 24 * dpr;
+  // The bottom margin has to clear the taller of the zoom stack (bottom-right,
+  // ~130px including its own gap above the footer) and the footer itself.
+  const top = (wide ? 100 : 70) * dpr, bottom = (wide ? 140 : 60) * dpr;
   const availW = Math.max(50, W - rightInset - leftInset - 24 * dpr), availH = Math.max(50, H - top - bottom);
   const s = Math.min(availW / w, availH / h);
   const fw = w * s, fh = h * s;
-  const x = leftInset + (availW - fw) / 2, y = top + (availH - fh) / 2;
+  const maxDx = Math.max(0, (availW - fw) / 2), maxDy = Math.max(0, (availH - fh) / 2);
+  frameOffset.dx = Math.max(-maxDx, Math.min(maxDx, frameOffset.dx));
+  frameOffset.dy = Math.max(-maxDy, Math.min(maxDy, frameOffset.dy));
+  const x = leftInset + (availW - fw) / 2 + frameOffset.dx, y = top + (availH - fh) / 2 + frameOffset.dy;
   return { x, y, w: fw, h: fh, outW: w, outH: h };
 }
 
@@ -477,15 +508,30 @@ function updateFrame() {
   const frame = $("frame");
   if (!state.showFrame || file) {
     frame.hidden = true;
-    $("frame-label").textContent = "";
+    $("status-strip").textContent = "";
     return;
   }
   const r = frameRect();
   const dpr = canvas.width / canvas.clientWidth;
   Object.assign(frame.style, { left: `${r.x / dpr}px`, top: `${r.y / dpr}px`, width: `${r.w / dpr}px`, height: `${r.h / dpr}px` });
-  const { widthKm } = frameCenter(r);
-  $("frame-label").textContent = `${r.outW} × ${r.outH} · ${widthKm < 10 ? widthKm.toFixed(2) : widthKm.toFixed(1)} km wide`;
   frame.hidden = false;
+  updateStatusStrip(r);
+}
+
+/** One thin, clearly-labeled line: export size vs. on-screen preview size, ground
+ *  width, contour interval and roughly how many contour lines that implies. */
+function updateStatusStrip(r) {
+  const strip = $("status-strip");
+  if (file || !built) {
+    strip.textContent = "";
+    return;
+  }
+  const { widthKm } = frameCenter(r);
+  const km = widthKm < 10 ? widthKm.toFixed(2) : widthKm.toFixed(1);
+  const theme = currentTheme(built.summary, viewInHeightmap().texPerPx);
+  const interval = theme.lines?.[0]?.every ?? state.interval;
+  const count = Math.round((built.hm.max - built.hm.min) / Math.max(0.01, interval));
+  strip.textContent = `Export: ${r.outW} × ${r.outH} · Preview: ${canvas.width} × ${canvas.height} · ${km} km wide · every ${fmt(interval)} m · ~${count} contours`;
 }
 
 function updateScale() {
@@ -496,6 +542,119 @@ function updateScale() {
   const len = nice.filter((n) => n <= target).pop() ?? 1;
   $("scale-bar").style.width = `${len / mPerCss}px`;
   $("scale-label").textContent = len >= 1000 ? `${len / 1000} km` : `${len} m`;
+}
+
+/** Drag (or arrow-key) the wallpaper frame off-center within the space it's allowed. */
+function wireFrameHandle() {
+  const handle = $("frame-handle");
+  let drag = null;
+  handle.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handle.setPointerCapture(e.pointerId);
+    drag = { x: e.clientX, y: e.clientY, dx: frameOffset.dx, dy: frameOffset.dy };
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    e.stopPropagation();
+    const dpr = canvas.width / canvas.clientWidth;
+    frameOffset.dx = drag.dx + (e.clientX - drag.x) * dpr;
+    frameOffset.dy = drag.dy + (e.clientY - drag.y) * dpr;
+    updateFrame();
+  });
+  const end = (e) => {
+    if (!drag) return;
+    e.stopPropagation();
+    drag = null;
+  };
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+  handle.addEventListener("keydown", (e) => {
+    const step = 20;
+    const keys = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (!keys[e.key]) return;
+    e.preventDefault();
+    e.stopPropagation();
+    frameOffset.dx += keys[e.key][0] * step;
+    frameOffset.dy += keys[e.key][1] * step;
+    updateFrame();
+  });
+}
+
+// ── Top bar: responsive overflow, popovers, hide-UI, global shortcuts ───────
+
+/** Below 1280px, index-every and smoothing move into the "more" popover;
+ *  below 761px (where the top bar itself gets tight), the size and interval
+ *  fields join them too. Reparenting (not duplicating) keeps each control a
+ *  single source of truth regardless of where it's currently shown. */
+function layoutTopbar() {
+  const w = window.innerWidth;
+  const popover = $("contours-popover"), btn = $("contours-btn"), inline = $("tb-controls");
+  const groups = [
+    { el: $("wallpaper-size-field"), toPopover: w <= 760 },
+    { el: $("interval-field"), toPopover: w <= 760 },
+    { el: $("index-field-tb"), toPopover: w <= 1279 },
+    { el: $("smooth-field-tb"), toPopover: w <= 1279 },
+  ];
+  let any = false;
+  for (const g of groups) {
+    if (g.toPopover) {
+      popover.appendChild(g.el);
+      any = true;
+    } else {
+      inline.insertBefore(g.el, btn);
+    }
+  }
+  btn.hidden = !any;
+  if (!any) closeContours();
+}
+
+function openContours() {
+  $("contours-popover").hidden = false;
+  $("contours-btn").setAttribute("aria-expanded", "true");
+}
+function closeContours() {
+  $("contours-popover").hidden = true;
+  $("contours-btn").setAttribute("aria-expanded", "false");
+}
+
+/** Elements that fade out with the UI. #topbar itself is excluded so the
+ *  hide-UI button inside it stays reachable to bring everything back. */
+const HIDEABLE_IDS = ["status-strip", "panel", "zoom", "readout", "bottom-bar"];
+function setUIHidden(hidden) {
+  document.body.classList.toggle("ui-hidden", hidden);
+  $("hide-ui-btn").setAttribute("aria-pressed", String(hidden));
+  for (const id of HIDEABLE_IDS) $(id).inert = hidden;
+  $("tb-controls").inert = hidden;
+  document.querySelector(".search-wrap").inert = hidden;
+  document.querySelector(".brand").inert = hidden;
+}
+
+function wireTopbar() {
+  $("contours-btn").addEventListener("click", () => {
+    if ($("contours-popover").hidden) openContours();
+    else closeContours();
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (!e.target.closest("#tb-controls")) closeContours();
+  });
+  $("hide-ui-btn").addEventListener("click", () => setUIHidden(!document.body.classList.contains("ui-hidden")));
+  $("shortcuts-close").addEventListener("click", () => $("shortcuts").close());
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "?" && !isTypingTarget(e.target)) {
+      e.preventDefault();
+      if (!$("shortcuts").open) $("shortcuts").showModal();
+    } else if (e.key.toLowerCase() === "h" && !isTypingTarget(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      setUIHidden(!document.body.classList.contains("ui-hidden"));
+    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (!$("export").open) createWallpaper();
+    } else if (e.key === "Escape") {
+      if (!$("contours-popover").hidden) closeContours();
+      for (const d of document.querySelectorAll("footer details.more[open]")) d.open = false;
+    }
+  });
 }
 
 // ── Side panel ──────────────────────────────────────────────────────────────
@@ -710,6 +869,11 @@ function syncLinesUI(theme) {
   $("interval").setAttribute("aria-valuetext", `${fmt(base)} metres${state.auto ? ", automatic" : ""}`);
   if (document.activeElement !== $("interval-num")) $("interval-num").value = fmt(base);
   $("auto").setAttribute("aria-pressed", String(state.auto));
+  // Auto computes the interval itself: lock the slider and number field while it's on,
+  // rather than showing three controls for one value.
+  $("interval").disabled = state.auto;
+  $("interval-num").disabled = state.auto;
+  $("interval-field").classList.toggle("locked", state.auto);
   const n = indexEvery(theme);
   for (const id of ["index-every", "index-dec", "index-inc"]) $(id).disabled = n === null;
   if (document.activeElement !== $("index-every")) $("index-every").value = n ?? "";
@@ -1328,15 +1492,12 @@ function wireMap() {
     zoomAt(canvas.width / 2, canvas.height / 2, 2);
     announceView();
   });
-  // Buttons that move the map, so it can be panned without dragging.
-  for (const b of document.querySelectorAll("[data-pan]")) {
-    b.addEventListener("click", () => {
-      const [x, y] = b.dataset.pan.split(",").map(Number);
-      const step = Math.min(canvas.width, canvas.height) * 0.25;
-      panBy(-x * step, -y * step);
-      announceView();
-    });
-  }
+  $("zoom-reset").addEventListener("click", () => {
+    if (file) return;
+    frameOffset = { dx: 0, dy: 0 };
+    setView(DEFAULT_VIEW.lat, DEFAULT_VIEW.lon, (DEFAULT_VIEW.km * 1000) / canvas.width);
+    announceView();
+  });
   new ResizeObserver(() => {
     if (sizeCanvas()) scheduleRebuild(120);
     draw();
@@ -1344,6 +1505,7 @@ function wireMap() {
 }
 
 let cursorTimer = 0;
+let lastCursorLatLon = null;
 function updateCursor(e) {
   if (cursorTimer || !built) return;
   cursorTimer = setTimeout(() => (cursorTimer = 0), 60);
@@ -1355,7 +1517,20 @@ function updateCursor(e) {
   const m = mercPerDevPx();
   const [mx, my] = mercatorPx(state.view.lon, state.view.lat, 0);
   const [lon, lat] = lonLatOf(mx + dx * m, my + dy * m, 0);
-  $("cursor").textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}${elev === null ? "" : ` · ${Math.round(elev)} m`}`;
+  lastCursorLatLon = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  $("cursor").textContent = `${lastCursorLatLon}${elev === null ? "" : ` · ${Math.round(elev)} m`}`;
+}
+
+function wireCursorCopy() {
+  $("cursor").addEventListener("click", async () => {
+    if (!lastCursorLatLon) return;
+    try {
+      await navigator.clipboard.writeText(lastCursorLatLon);
+      toast(`Copied ${lastCursorLatLon}`);
+    } catch {
+      toast("Clipboard unavailable: select the text and copy it", true);
+    }
+  });
 }
 
 function wirePanel() {
@@ -1494,6 +1669,7 @@ function wirePanel() {
     state.auto = false;
     state.interval = Math.min(1000, Math.max(0.5, m));
     store.save();
+    writeHash();
     thumbs.invalidate();
     draw();
   };
@@ -1503,6 +1679,7 @@ function wirePanel() {
     state.auto = !state.auto;
     if (!state.auto) state.interval = parseFloat($("interval-num").value) || state.interval;
     store.save();
+    writeHash();
     thumbs.invalidate();
     draw();
   });
@@ -1553,7 +1730,7 @@ function wirePanel() {
     store.save();
     updateFrame();
   });
-  $("create").addEventListener("click", createWallpaper);
+  for (const b of document.querySelectorAll(".js-create")) b.addEventListener("click", createWallpaper);
   $("export-close").addEventListener("click", () => $("export").close());
   $("download-theme").addEventListener("click", () => {
     if (!exportTheme) return;
@@ -1691,6 +1868,7 @@ function wireSearch() {
   $("search-form").addEventListener("submit", (e) => {
     e.preventDefault();
     if (activeResult >= 0) chooseResult(activeResult);
+    else if (results.length) chooseResult(0); // Enter with results showing jumps to the top one
     else runSearch();
   });
   $("search-go").addEventListener("click", runSearch);
@@ -1709,7 +1887,7 @@ function wireSearch() {
     }
   });
   document.addEventListener("pointerdown", (e) => {
-    if (!e.target.closest(".searchbar")) showResults([]);
+    if (!e.target.closest(".search-wrap")) showResults([]);
   });
 }
 
@@ -1758,9 +1936,15 @@ async function init() {
     state.custom = null;
   }
   if (!["background", "lines", "index"].includes(state.swatchTarget)) state.swatchTarget = "lines";
+  if (hash.line) {
+    state.auto = hash.line.auto;
+    if (!hash.line.auto) state.interval = Math.min(1000, Math.max(0.5, hash.line.interval));
+  }
 
   sizeCanvas();
-  const v = hash.view;
+  // A shared link's place wins; otherwise fall back to wherever this browser
+  // last was, then to the default view.
+  const v = hash.view ?? saved?.view;
   state.view = v && Math.abs(v.lat) <= 85 && Math.abs(v.lon) <= 180 && v.mpp > 0
     ? { lat: v.lat, lon: v.lon, mpp: Math.max(MIN_MPP, Math.min(MAX_MPP, v.mpp)) }
     : { lat: DEFAULT_VIEW.lat, lon: DEFAULT_VIEW.lon, mpp: (DEFAULT_VIEW.km * 1000) / canvas.width };
@@ -1770,6 +1954,11 @@ async function init() {
   wireMap();
   wirePanel();
   wireSearch();
+  wireCursorCopy();
+  wireFrameHandle();
+  wireTopbar();
+  layoutTopbar();
+  window.addEventListener("resize", debounce(layoutTopbar, 150));
   window.addEventListener("hashchange", () => {
     const h = readHash();
     if (h.view && Math.abs(h.view.lat - state.view.lat) + Math.abs(h.view.lon - state.view.lon) > 1e-4) {

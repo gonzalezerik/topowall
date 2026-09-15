@@ -14,59 +14,117 @@
 <body>
   <a class="skip-link" href="#panel-start">Skip to map settings</a>
 
-  <header class="floating searchbar card">
+  <header class="floating topbar card" id="topbar">
     <h1 class="sr-only">topowall: contour wallpapers of anywhere on Earth</h1>
-    <div class="search-row">
-      <a class="brand" href="https://github.com/gonzalezerik/topowall" target="_blank" rel="noopener noreferrer"><span class="logo" aria-hidden="true"></span>topowall<span class="sr-only"> on GitHub (opens in a new tab)</span></a>
+    <a class="brand" href="https://github.com/gonzalezerik/topowall" target="_blank" rel="noopener noreferrer"><span class="logo" aria-hidden="true"></span><span class="wordmark">topowall</span><span class="sr-only"> on GitHub (opens in a new tab)</span></a>
+
+    <div class="search-wrap">
       <form id="search-form" role="search" autocomplete="off" aria-label="Place search">
         <input id="search" type="text" inputmode="search" placeholder="Search a place or coordinates" spellcheck="false"
           role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="results"
           aria-label="Search a place or coordinates" aria-describedby="search-help">
-        <span class="sr-only" id="search-help">Type coordinates such as 37.738, -119.575 or a place name, then press Enter.</span>
       </form>
       <button class="icon-btn" id="search-go" type="button" aria-label="Search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       </button>
+      <span class="sr-only" id="search-help">Type coordinates such as 37.738, -119.575 or a place name, then press Enter. Press the question mark key anywhere for keyboard shortcuts.</span>
+      <ul class="results" id="results" role="listbox" aria-label="Search results" hidden></ul>
+      <div class="results-note" id="results-note" role="status" aria-live="polite"></div>
     </div>
-    <ul class="results" id="results" role="listbox" aria-label="Search results" hidden></ul>
-    <div class="results-note" id="results-note" role="status" aria-live="polite"></div>
+
+    <div class="tb-controls" id="tb-controls">
+      <div class="tb-field" id="wallpaper-size-field">
+        <label class="tb-label" for="output-size">Size</label>
+        <select id="output-size">
+          <option value="screen">This screen</option>
+          <option value="1920x1080">1920 × 1080</option>
+          <option value="2560x1440">2560 × 1440</option>
+          <option value="2880x1800">2880 × 1800</option>
+          <option value="3840x2160">3840 × 2160 (4K)</option>
+          <option value="5120x2160">5120 × 2160</option>
+          <option value="1206x2622">1206 × 2622 (phone)</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <span class="popover-body" id="custom-size" hidden>
+          <label class="sr-only" for="out-w">Width in pixels</label>
+          <input type="number" id="out-w" min="16" max="16384" value="2880"> <span aria-hidden="true">×</span>
+          <label class="sr-only" for="out-h">Height in pixels</label>
+          <input type="number" id="out-h" min="16" max="16384" value="1800">
+        </span>
+      </div>
+
+      <div class="tb-field tb-interval" id="interval-field">
+        <label class="tb-label" for="interval-num" id="interval-label-tb">Interval</label>
+        <input type="range" id="interval" min="0" max="1000" step="1" aria-label="Contour interval" aria-describedby="interval-tip">
+        <span class="value-edit"><input type="number" id="interval-num" min="0.5" max="1000" step="any" aria-describedby="interval-tip"><span aria-hidden="true">m</span></span>
+        <button class="btn small toggle" id="auto" type="button" aria-pressed="true" aria-describedby="auto-desc">Auto</button>
+        <span class="sr-only" id="auto-desc">Picks the spacing from the terrain and zoom. While on, it locks the slider and number field.</span>
+        <span class="tooltip" id="interval-tip" role="tooltip">Distance between contour lines, in metres. "Auto" adjusts it as you zoom.</span>
+      </div>
+
+      <div class="tb-field" id="index-field-tb">
+        <label class="tb-label" for="index-every" id="index-label-tb">Index every</label>
+        <span class="stepper" aria-describedby="index-tip">
+          <button type="button" class="btn small" id="index-dec" aria-label="Fewer lines per index line">−</button>
+          <input type="number" id="index-every" min="1" max="50">
+          <button type="button" class="btn small" id="index-inc" aria-label="More lines per index line">+</button>
+        </span>
+        <span class="tooltip" id="index-tip" role="tooltip">Every Nth contour line draws heavier, as a reading aid — e.g. 5 bolds every 5th line.</span>
+      </div>
+
+      <div class="tb-field" id="smooth-field-tb">
+        <label class="tb-label" for="smooth" id="smooth-label">Smoothing</label>
+        <input type="range" id="smooth" min="0" max="200" step="0.25" aria-describedby="smooth-tip smooth-desc">
+        <output id="smooth-out" for="smooth" aria-hidden="true"></output>
+        <span class="sr-only" id="smooth-desc">Smooths small bumps in the elevation data so lines flow.</span>
+        <span class="tooltip" id="smooth-tip" role="tooltip">Blurs small elevation noise, in metres, so lines flow more naturally. Higher means smoother but less detail.</span>
+      </div>
+
+      <button class="icon-btn" id="contours-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="contours-popover" aria-label="More contour settings" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16M4 12h10M4 18h7"/></svg>
+      </button>
+      <div class="popover-body" id="contours-popover" role="group" aria-label="More contour settings" hidden></div>
+
+      <button class="btn primary js-create" id="create" type="button" aria-haspopup="dialog">Create wallpaper</button>
+    </div>
+
+    <button class="icon-btn" id="hide-ui-btn" type="button" aria-pressed="false" aria-label="Hide panels (H)" aria-keyshortcuts="h">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 12s3.6-7 9-7 9 7 9 7-3.6 7-9 7-9-7-9-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
   </header>
+
+  <div class="status-strip" id="status-strip" role="status" aria-live="off"></div>
 
   <main id="main">
     <div class="map" id="map" tabindex="0" role="application" aria-roledescription="map" aria-label="Contour map" aria-describedby="map-help">
       <canvas id="canvas" aria-hidden="true"></canvas>
-      <div class="frame" id="frame" aria-hidden="true" hidden></div>
+      <div class="frame" id="frame" aria-hidden="true" hidden>
+        <button type="button" class="frame-handle" id="frame-handle" aria-label="Drag to move the wallpaper area"></button>
+      </div>
     </div>
     <p class="sr-only" id="map-help">Arrow keys move the map, plus and minus zoom. The buttons next to the map do the same. The map shows contour lines only; its place, zoom and colors are described in the map status.</p>
     <p class="sr-only" id="map-status" role="status" aria-live="polite"></p>
     <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
     <div class="map-error" id="map-error" role="alert" hidden></div>
+    <div class="map-loading" id="map-loading" hidden aria-hidden="true"><span class="spinner"></span> Loading elevation…</div>
 
     <div class="floating banner card" id="file-banner" hidden>
       <span id="file-name"></span>
       <button class="btn small" id="file-close" type="button">Back to the map</button>
     </div>
 
-    <div class="floating leftbar" id="leftbar">
-      <div class="mapctl card" id="zoom" role="group" aria-label="Map controls">
-        <div class="pad">
-          <button type="button" class="pad-up" data-pan="0,-1" aria-label="Move map north">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 15 6-6 6 6"/></svg></button>
-          <button type="button" class="pad-left" data-pan="-1,0" aria-label="Move map west">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 6-6 6 6 6"/></svg></button>
-          <button type="button" class="pad-right" data-pan="1,0" aria-label="Move map east">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></button>
-          <button type="button" class="pad-down" data-pan="0,1" aria-label="Move map south">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button>
-        </div>
-        <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
-        <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
-      </div>
+    <div class="scalebar" id="readout">
+      <div class="scale"><span id="scale-label"></span><div class="scale-bar" id="scale-bar" aria-hidden="true"></div></div>
+      <button type="button" id="cursor" aria-describedby="cursor-copy-desc"></button>
+      <span class="sr-only" id="cursor-copy-desc">Copies these coordinates.</span>
+    </div>
 
-      <div class="readout card" id="readout">
-        <div class="scale"><span id="scale-label"></span><div class="scale-bar" id="scale-bar" aria-hidden="true"></div></div>
-        <span id="cursor"></span>
-      </div>
+    <div class="floating zoomstack card" id="zoom" role="group" aria-label="Zoom">
+      <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+      <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+      <button type="button" id="zoom-reset" aria-label="Reset to the default view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+      </button>
     </div>
   </main>
 
@@ -79,10 +137,6 @@
       <section class="group" id="wallpaper-group" aria-labelledby="h-wallpaper">
         <h2 id="h-wallpaper">Wallpaper</h2>
         <label class="check"><input type="checkbox" id="show-frame" checked> Show the wallpaper's area</label>
-        <button class="btn primary wide" id="create" type="button" aria-haspopup="dialog">Create wallpaper</button>
-        <button class="btn wide" id="open-file" type="button" aria-describedby="open-file-desc">Open a .topo file</button>
-        <span class="sr-only" id="open-file-desc">A heightmap made with the topowall command-line app.</span>
-        <input type="file" id="file" accept=".topo,image/png" tabindex="-1" aria-hidden="true" hidden>
       </section>
 
       <section class="group" id="colors-group" aria-labelledby="h-colors">
@@ -91,49 +145,58 @@
           <span class="row spread"><span class="name" id="scheme-name"></span><span class="dim" id="scheme-browse-hint">Browse colors</span></span>
           <span class="strip" id="scheme-strip" aria-hidden="true"></span>
         </button>
-        <div class="field" id="palette-options">
-          <span class="dim" id="style-label">Line style</span>
-          <div class="segmented" role="radiogroup" aria-labelledby="style-label" id="style">
-            <button type="button" role="radio" data-value="subtle" aria-describedby="style-subtle-desc">Subtle</button>
-            <button type="button" role="radio" data-value="vivid" aria-describedby="style-vivid-desc">Vivid</button>
-            <button type="button" role="radio" data-value="mono" aria-describedby="style-mono-desc">Mono</button>
-          </div>
-          <span class="sr-only" id="style-subtle-desc">Soft lines from the scheme's accent color.</span>
-          <span class="sr-only" id="style-vivid-desc">The accent color as it is.</span>
-          <span class="sr-only" id="style-mono-desc">The scheme's text color only.</span>
-          <div class="field-head">
-            <span class="dim" id="bgmode-label">Background</span>
-            <div class="segmented" role="radiogroup" aria-labelledby="bgmode-label" id="background-mode">
-              <button type="button" role="radio" data-value="palette">Scheme</button>
-              <button type="button" role="radio" data-value="black">Black</button>
+
+        <details class="collapsible" id="palette-options" open>
+          <summary>Line style &amp; background</summary>
+          <div class="collapsible-body">
+            <span class="dim" id="style-label">Line style</span>
+            <div class="segmented" role="radiogroup" aria-labelledby="style-label" id="style">
+              <button type="button" role="radio" data-value="subtle" aria-describedby="style-subtle-desc">Subtle</button>
+              <button type="button" role="radio" data-value="vivid" aria-describedby="style-vivid-desc">Vivid</button>
+              <button type="button" role="radio" data-value="mono" aria-describedby="style-mono-desc">Mono</button>
+            </div>
+            <span class="sr-only" id="style-subtle-desc">Soft lines from the scheme's accent color.</span>
+            <span class="sr-only" id="style-vivid-desc">The accent color as it is.</span>
+            <span class="sr-only" id="style-mono-desc">The scheme's text color only.</span>
+            <div class="field-head">
+              <span class="dim" id="bgmode-label">Background</span>
+              <div class="segmented" role="radiogroup" aria-labelledby="bgmode-label" id="background-mode">
+                <button type="button" role="radio" data-value="palette">Scheme</button>
+                <button type="button" role="radio" data-value="black">Black</button>
+              </div>
             </div>
           </div>
-        </div>
+        </details>
 
-        <div class="field" id="swatch-panel">
-          <span class="dim" id="swatch-help"><span id="swatch-label">Scheme colors</span>: choose where a color goes, then pick the color</span>
-          <div class="segmented small" role="radiogroup" aria-labelledby="swatch-help" id="swatch-target">
-            <button type="button" role="radio" data-value="background">Background</button>
-            <button type="button" role="radio" data-value="lines">Lines</button>
-            <button type="button" role="radio" data-value="index">Index lines</button>
+        <details class="collapsible" id="swatch-panel" open>
+          <summary>Scheme colors</summary>
+          <div class="collapsible-body">
+            <span class="dim" id="swatch-help"><span id="swatch-label">Scheme colors</span>: choose where a color goes, then pick the color</span>
+            <div class="segmented small" role="radiogroup" aria-labelledby="swatch-help" id="swatch-target">
+              <button type="button" role="radio" data-value="background">Background</button>
+              <button type="button" role="radio" data-value="lines">Lines</button>
+              <button type="button" role="radio" data-value="index">Index lines</button>
+            </div>
+            <div class="swatches" id="swatches" role="group" aria-labelledby="swatch-label"></div>
+            <div class="row spread" id="swatch-edit-row">
+              <topo-color-input id="swatch-add" label="Color to add"></topo-color-input>
+              <span class="row">
+                <button class="btn small" id="swatch-add-btn" type="button" aria-describedby="swatch-add-desc">+ Add color</button>
+                <button class="btn small" id="swatch-edit" type="button" aria-pressed="false">Remove colors</button>
+              </span>
+            </div>
+            <span class="sr-only" id="swatch-add-desc">Picking a color and adding it starts your own copy of this scheme, saved in this browser.</span>
           </div>
-          <div class="swatches" id="swatches" role="group" aria-labelledby="swatch-label"></div>
-          <div class="row spread" id="swatch-edit-row">
-            <topo-color-input id="swatch-add" label="Color to add"></topo-color-input>
-            <span class="row">
-              <button class="btn small" id="swatch-add-btn" type="button" aria-describedby="swatch-add-desc">+ Add color</button>
-              <button class="btn small" id="swatch-edit" type="button" aria-pressed="false">Remove colors</button>
-            </span>
-          </div>
-          <span class="sr-only" id="swatch-add-desc">Picking a color and adding it starts your own copy of this scheme, saved in this browser.</span>
-        </div>
+        </details>
 
-        <div class="field colors-detail" id="customize">
-          <h3 class="sub-heading">Pick any color</h3>
-          <p class="hint">Click a swatch below to open the color wheel.</p>
-          <div class="field-head"><span id="bg-color-label">Background</span><topo-color-input id="background" label="Background color"></topo-color-input></div>
-          <div id="tiers" class="field"></div>
-        </div>
+        <details class="collapsible" id="customize">
+          <summary>Pick any color</summary>
+          <div class="collapsible-body">
+            <p class="hint">Click a swatch above to open the color wheel.</p>
+            <div class="field-head"><span id="bg-color-label">Background</span><topo-color-input id="background" label="Background color"></topo-color-input></div>
+            <div id="tiers" class="field"></div>
+          </div>
+        </details>
 
         <div class="field" id="mine-options" hidden>
           <div class="field-head">
@@ -151,53 +214,12 @@
         </div>
       </section>
 
-      <section class="group" id="lines-group" aria-labelledby="h-lines">
-        <h2 id="h-lines">Lines</h2>
-        <span class="frame-readout" id="frame-label" aria-hidden="true"></span>
-        <div class="field" id="wallpaper-size-field">
-          <label for="output-size">Wallpaper size</label>
-          <select id="output-size">
-            <option value="screen">This screen</option>
-            <option value="1920x1080">1920 × 1080</option>
-            <option value="2560x1440">2560 × 1440</option>
-            <option value="2880x1800">2880 × 1800</option>
-            <option value="3840x2160">3840 × 2160 (4K)</option>
-            <option value="5120x2160">5120 × 2160</option>
-            <option value="1206x2622">1206 × 2622 (phone)</option>
-            <option value="custom">Custom…</option>
-          </select>
-          <div class="row" id="custom-size" hidden>
-            <label class="sr-only" for="out-w">Width in pixels</label>
-            <input type="number" id="out-w" min="16" max="16384" value="2880"> <span aria-hidden="true">×</span>
-            <label class="sr-only" for="out-h">Height in pixels</label>
-            <input type="number" id="out-h" min="16" max="16384" value="1800">
-          </div>
-        </div>
-        <div class="field" id="interval-field">
-          <div class="field-head">
-            <label for="interval-num">Line every (metres)</label>
-            <span class="value-edit"><input type="number" id="interval-num" min="0.5" max="1000" step="any"><span aria-hidden="true">m</span></span>
-          </div>
-          <div class="row">
-            <input type="range" id="interval" min="0" max="1000" step="1" aria-label="Line spacing">
-            <button class="btn small" id="auto" type="button" aria-pressed="true" aria-describedby="auto-desc">Auto</button>
-            <span class="sr-only" id="auto-desc">Picks the spacing from the terrain and zoom.</span>
-          </div>
-        </div>
-        <div class="field-head">
-          <label for="index-every">Index line every</label>
-          <span class="stepper">
-            <button type="button" class="btn small" id="index-dec" aria-label="Fewer lines per index line">−</button>
-            <input type="number" id="index-every" min="1" max="50">
-            <button type="button" class="btn small" id="index-inc" aria-label="More lines per index line">+</button>
-          </span>
-        </div>
-        <div class="slider-row">
-          <label for="smooth" id="smooth-label">Smoothing</label><input type="range" id="smooth" min="0" max="200" step="0.25" aria-describedby="smooth-desc"><output id="smooth-out" for="smooth" aria-hidden="true"></output>
-        </div>
-        <span class="sr-only" id="smooth-desc">Smooths small bumps in the elevation data so lines flow.</span>
-      </section>
-
+    </div>
+    <div class="panel-actions" id="panel-actions">
+      <button class="btn primary wide js-create" type="button" aria-haspopup="dialog">Create wallpaper</button>
+      <button class="btn wide" id="open-file" type="button" aria-describedby="open-file-desc">Open a .topo file</button>
+      <span class="sr-only" id="open-file-desc">A heightmap made with the topowall command-line app.</span>
+      <input type="file" id="file" accept=".topo,image/png" tabindex="-1" aria-hidden="true" hidden>
     </div>
   </aside>
 
@@ -319,6 +341,24 @@
           <button class="btn small" id="copy-cli" type="button" aria-describedby="cli-label">Copy</button></div>
         <pre class="code" id="export-cli" tabindex="0" role="region" aria-labelledby="cli-label"></pre>
       </div>
+    </div>
+  </dialog>
+
+  <dialog id="shortcuts" aria-labelledby="shortcuts-title">
+    <div class="dialog-head">
+      <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+      <button class="icon-btn" id="shortcuts-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="shortcuts-body">
+      <div class="shortcut-row"><kbd>↑ ↓ ← →</kbd><span>Pan the map</span></div>
+      <div class="shortcut-row"><kbd>+</kbd><kbd>−</kbd><span>Zoom in / out</span></div>
+      <div class="shortcut-row"><kbd>Enter</kbd><span>In search: jump to the top result</span></div>
+      <div class="shortcut-row"><kbd>Ctrl/⌘</kbd><kbd>Enter</kbd><span>Create the wallpaper</span></div>
+      <div class="shortcut-row"><kbd>H</kbd><span>Hide or show all panels</span></div>
+      <div class="shortcut-row"><kbd>Esc</kbd><span>Close a popover or dialog</span></div>
+      <div class="shortcut-row"><kbd>?</kbd><span>Show this list</span></div>
     </div>
   </dialog>
 

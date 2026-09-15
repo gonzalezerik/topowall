@@ -39,8 +39,17 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 .map canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .frame { position: absolute; pointer-events: none; border: 1.5px solid rgba(255, 255, 255, .75); border-radius: 2px;
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .38); }
-.frame-readout { font: 11.5px var(--mono); color: var(--muted); white-space: nowrap; }
-.frame-readout:empty { display: none; }
+.frame-handle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, .85); background: rgba(12, 14, 17, .5); cursor: grab; pointer-events: auto; touch-action: none; }
+.frame-handle:active { cursor: grabbing; }
+.frame-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.status-strip { position: fixed; left: 50%; top: 78px; transform: translateX(-50%); z-index: 8; color: var(--muted); font: 11px var(--mono);
+  white-space: nowrap; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.status-strip:empty { display: none; }
+.map-loading { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 6; display: flex; align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 16px; font-size: 12.5px; }
+.spinner { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .progress { position: fixed; left: 0; right: 0; top: 0; height: 2px; z-index: 30; pointer-events: none; }
 .progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
 .map-error { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 420px; text-align: center;
@@ -50,50 +59,75 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
  }
 
-/* ── Search ──────────────────────────────────────────────────────────── */
-.searchbar { left: 14px; top: 14px; width: min(420px, calc(100vw - 28px)); }
-.search-row { display: flex; align-items: center; gap: 6px; padding: 5px 5px 5px 10px; }
-.brand { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; color: var(--text); font-weight: 650; font-size: 14px; padding-right: 6px;
-  border-right: 1px solid var(--border); margin-right: 2px; }
+/* ── Top bar: logo, search, wallpaper/contour controls, all in one row ── */
+.topbar { left: 14px; right: 14px; top: 14px; height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 10px; overflow: visible; }
+.brand { display: inline-flex; align-items: center; gap: 7px; flex: none; color: var(--text); font-weight: 650; font-size: 13.5px; }
 .brand:hover { text-decoration: none; }
+.wordmark { display: inline-block; }
 .logo { width: 18px; height: 18px; border-radius: 5px; flex: none; background:
   repeating-radial-gradient(circle at 30% 70%, transparent 0 2px, #7aa2f7 2px 3px); box-shadow: inset 0 0 0 1px var(--border); }
-#search-form { flex: 1; display: flex; min-width: 0; }
-#search { flex: 1; min-width: 0; background: transparent; border: 0; border-radius: 6px; padding: 6px 6px; font-size: 14px; min-height: 32px; }
-#search:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.search-wrap { position: relative; flex: 1 1 320px; min-width: 120px; max-width: 320px; }
+#search-form { display: flex; min-width: 0; }
+#search { width: 100%; min-width: 0; background: var(--surface); border: 1px solid rgba(255, 255, 255, .16); border-radius: 8px; padding: 0 10px;
+  font-size: 13.5px; height: 32px; }
+#search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 #search::placeholder { color: var(--muted); }
+#search-go { position: absolute; right: 2px; top: 1px; }
 .icon-btn { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; border: 0; background: transparent;
   color: var(--muted); cursor: pointer; flex: none; }
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .icon-btn svg { width: 18px; height: 18px; }
-.results { list-style: none; margin: 0; padding: 4px; border-top: 1px solid var(--border); max-height: min(420px, 60vh); overflow: auto; }
+.results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; list-style: none; margin: 0; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+  max-height: min(420px, 60vh); overflow: auto; }
 .results li { padding: 8px 10px; border-radius: 8px; cursor: pointer; display: grid; gap: 1px; }
 .results li[aria-selected="true"], .results li:hover { background: var(--surface-2); }
 .results .r-name { font-weight: 550; }
 .results .r-detail { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.results-note { color: var(--muted); font-size: 12px; padding: 0 14px; }
-.results-note:not(:empty) { padding: 6px 14px 9px; border-top: 1px solid var(--border); }
+.results-note { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 20; color: var(--muted); font-size: 12px; }
+.results-note:not(:empty) { padding: 8px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 
-/* ── Zoom, scale, readout ────────────────────────────────────────────── */
-/* Left side, vertically centered: pan, zoom and the scale readout live
-   together where they're easy to find, without crowding the wallpaper
-   frame or the color/settings panel. */
-.leftbar { left: 14px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
-.mapctl { display: grid; overflow: hidden; justify-items: stretch; }
-.mapctl > button, .pad button { min-width: 36px; height: 36px; border: 0; background: transparent; cursor: pointer; font-size: 18px; color: var(--text);
-  display: grid; place-items: center; }
-.mapctl > button { border-top: 1px solid var(--border); }
-.mapctl button:hover { background: var(--surface-2); }
-.mapctl button:focus-visible { outline-offset: -3px; }
-.pad { display: grid; grid-template-columns: repeat(3, 36px); grid-template-rows: repeat(3, 32px); }
-.pad button { height: 32px; min-width: 32px; }
-.pad svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.pad-up { grid-column: 2; grid-row: 1; } .pad-left { grid-column: 1; grid-row: 2; }
-.pad-right { grid-column: 3; grid-row: 2; } .pad-down { grid-column: 2; grid-row: 3; }
-.readout { display: flex; align-items: center; gap: 12px; padding: 5px 10px; font: 11.5px var(--mono); color: var(--text); }
-.scale { display: grid; gap: 2px; }
-.scale-bar { height: 5px; border: 1.5px solid var(--text); border-top: 0; }
+/* ── Wallpaper/contour controls, inline in the top bar ──────────────────── */
+.tb-controls { display: flex; align-items: center; gap: 8px; flex: none; }
+.tb-field { position: relative; display: flex; align-items: center; gap: 5px; min-height: 30px; }
+.tb-label { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.tb-field select { width: auto; min-width: 0; height: 30px; padding: 0 6px; font-size: 12.5px; }
+.tb-field input[type="number"] { height: 30px; min-height: 0; padding: 0 6px; }
+.tb-field input[type="range"] { width: 62px; height: 30px; }
+.tb-field .value-edit input { width: 44px; }
+.tb-field .stepper input { height: 30px; min-height: 0; width: 38px; }
+.tb-field .stepper .btn.small { min-width: 24px; padding: 4px 6px; }
+.tb-field .btn.small { min-height: 30px; }
+.tb-field:hover .tooltip, .tb-field:focus-within .tooltip { opacity: 1; visibility: visible; }
+.btn.toggle[aria-pressed="true"] { background: var(--accent); color: #0c0e11; border-color: transparent; }
+.tooltip { position: absolute; left: 0; top: calc(100% + 8px); z-index: 25; width: max-content; max-width: 240px;
+  background: #0a0b0e; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  font-size: 12px; line-height: 1.4; box-shadow: var(--shadow); opacity: 0; visibility: hidden; transition: opacity .1s; pointer-events: none; }
+#interval-field.locked input[type="range"], #interval-field.locked input[type="number"] { opacity: .45; pointer-events: none; }
+#custom-size.popover-body { top: calc(100% + 6px); left: 0; display: flex; align-items: center; gap: 6px; width: max-content; padding: 10px 12px; }
+#custom-size input[type="number"] { width: 68px; }
+#contours-popover.popover-body { right: 0; left: auto; top: calc(100% + 8px); width: 240px; }
+#hide-ui-btn { flex: none; }
+
+/* ── Zoom stack, scale + coordinates ─────────────────────────────────── */
+/* Zoom lives bottom-right of the canvas, out of the way of the search bar,
+   the panel and the wallpaper selection; drag-to-pan and the arrow keys
+   cover panning, so there's no directional pad to take up space. */
+.zoomstack { right: 348px; bottom: 46px; width: 36px; display: grid; overflow: hidden; }
+.zoomstack button { width: 36px; height: 27px; border: 0; border-top: 1px solid var(--border); background: transparent; cursor: pointer;
+  font-size: 15px; color: var(--text); display: grid; place-items: center; }
+.zoomstack button:first-child { border-top: 0; }
+.zoomstack button:hover { background: var(--surface-2); }
+.zoomstack button:focus-visible { outline-offset: -3px; }
+.zoomstack svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.scalebar { position: fixed; left: 14px; bottom: 46px; z-index: 10; display: flex; align-items: center; gap: 10px; height: 24px; padding: 0 10px;
+  background: rgba(12, 14, 17, .55); border-radius: 999px; font: 11px var(--mono); color: var(--text); }
+.scale { display: flex; align-items: center; gap: 6px; }
+.scale-bar { height: 5px; width: 0; border: 1.5px solid var(--text); border-top: 0; }
+#cursor { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 4px; }
+#cursor:hover, #cursor:focus-visible { color: var(--accent); }
+#cursor:empty { display: none; }
 .bottom-bar { left: 0; right: 0; bottom: 0; padding: 5px 14px; font-size: 11.5px; color: #a3a9b3; background: rgb(12, 14, 17);
   display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
 .attribution { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
@@ -108,22 +142,37 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 .sources-inline .more > summary::before { content: none; }
 .sources-inline .more > summary:hover { color: var(--text); }
 .sources-inline .more[open] > summary { color: var(--text); }
-.sources-inline .more .popover-body {
-  position: absolute; bottom: calc(100% + 10px); left: 0; z-index: 20;
-  width: max-content; max-width: min(380px, calc(100vw - 40px)); max-height: 70vh; overflow-y: auto;
+.popover-body {
+  position: absolute; z-index: 20; max-height: 70vh; overflow-y: auto;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
   padding: 14px 16px; display: grid; gap: 10px; font-size: 13px; color: var(--text);
 }
+.sources-inline .more .popover-body { bottom: calc(100% + 10px); left: 0; width: max-content; max-width: min(380px, calc(100vw - 40px)); }
 .banner { left: 50%; top: 14px; transform: translateX(-50%); padding: 7px 8px 7px 14px; display: flex; gap: 10px; align-items: center; }
 
 /* ── Side panel ──────────────────────────────────────────────────────── */
 /* No backdrop-filter here: it would make the color picker's fixed popover clip inside the panel. */
-.panel { right: 14px; top: 14px; bottom: 40px; width: 322px; display: flex; flex-direction: column; overflow: hidden;
+.panel { right: 14px; top: 78px; bottom: 46px; width: 320px; display: flex; flex-direction: column; overflow: hidden;
   backdrop-filter: none; background: rgb(20, 22, 26); }
 .panel-scroll { overflow-y: auto; overflow-x: hidden; flex: 1; }
-.panel-toggle { display: none; }
+.panel-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 14px; border: 0;
+  background: transparent; cursor: pointer; font-weight: 600; font-size: 12.5px; color: var(--text); flex: none; }
+.panel-toggle:hover { background: var(--surface-2); }
+.panel:not(.collapsed) .panel-toggle { border-bottom: 1px solid var(--border); }
+.panel-toggle span[aria-hidden] { transition: transform .12s; }
+.panel.collapsed .panel-toggle span[aria-hidden] { transform: rotate(-90deg); }
+.panel.collapsed .panel-scroll, .panel.collapsed .panel-actions { display: none; }
+.panel-actions { flex: none; display: grid; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); background: rgb(20, 22, 26); }
 .group { padding: 14px 16px; border-bottom: 1px solid var(--border); display: grid; gap: 10px; }
 .group:last-child { border-bottom: 0; }
+.collapsible { display: grid; gap: 0; }
+.collapsible > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  font-size: 11.5px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.collapsible > summary::-webkit-details-marker { display: none; }
+.collapsible > summary::before { content: "▸"; font-size: 10px; transition: transform .12s; flex: none; }
+.collapsible[open] > summary::before { transform: rotate(90deg); }
+.collapsible[open] > summary { margin-bottom: 8px; }
+.collapsible-body { display: grid; gap: 10px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .row.spread { justify-content: space-between; }
 .field { display: grid; gap: 6px; }
@@ -249,6 +298,24 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 .export-status { margin: 0; color: var(--muted); text-align: center; }
 .export-status:empty { display: none; }
 
+#shortcuts { width: min(420px, calc(100vw - 32px)); }
+.shortcuts-body { padding: 12px 16px 16px; display: grid; gap: 10px; }
+.shortcut-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.shortcut-row span { color: var(--muted); }
+kbd { font: 11.5px var(--mono); background: var(--surface); border: 1px solid rgba(255, 255, 255, .3); border-bottom-width: 2px;
+  border-radius: 5px; padding: 2px 6px; color: var(--text); }
+
+/* Hide-UI mode (H key or the eye button): fade all panel chrome for an
+   unobstructed preview. Map, wallpaper frame and its handle stay put and
+   interactive so panning/zooming and dragging the frame still work. */
+body.ui-hidden .topbar, body.ui-hidden .status-strip, body.ui-hidden .panel,
+body.ui-hidden .zoomstack, body.ui-hidden .scalebar, body.ui-hidden .bottom-bar, body.ui-hidden .frame-handle {
+  opacity: 0; pointer-events: none; transition: opacity .15s; }
+body.ui-hidden .frame { box-shadow: none; }
+body:not(.ui-hidden) .topbar, body:not(.ui-hidden) .status-strip, body:not(.ui-hidden) .panel,
+body:not(.ui-hidden) .zoomstack, body:not(.ui-hidden) .scalebar, body:not(.ui-hidden) .bottom-bar {
+  transition: opacity .15s; }
+
 .toast { position: fixed; bottom: 42px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid rgba(255, 255, 255, .3);
   padding: 4px 4px 4px 14px; border-radius: 9px; box-shadow: var(--shadow); font-size: 12.5px; z-index: 50; max-width: calc(100vw - 32px);
   display: flex; align-items: center; gap: 8px; }
@@ -258,51 +325,20 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
 .drop-hint { position: fixed; inset: 12px; display: grid; place-items: center; border: 2px dashed var(--accent); border-radius: 16px;
   background: rgba(12, 14, 17, .8); font-size: 16px; pointer-events: none; z-index: 40; }
 
-/* ── Small screens: the panel becomes a bottom sheet ─────────────────── */
+/* ── Small screens: the panel becomes a bottom sheet, the top bar shows
+   only search + create (everything else moves into the contours popover,
+   via JS — see layoutTopbar in app.js) ──────────────────────────────── */
 @media (max-width: 760px) {
-  .panel { left: 8px; right: 8px; top: auto; bottom: 30px; width: auto; max-height: 64vh; }
-  .panel.collapsed .panel-scroll { display: none; }
-  .panel-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 16px; border: 0;
-    background: transparent; cursor: pointer; font-weight: 600; }
-  .panel:not(.collapsed) .panel-toggle { border-bottom: 1px solid var(--border); }
-  .leftbar { left: 12px; top: 70px; transform: none; }
-  .readout { display: none; }
-  .searchbar { left: 8px; top: 8px; width: calc(100vw - 16px); }
+  .panel { left: 8px; right: 8px; top: auto; bottom: 40px; width: auto; max-height: 55vh; }
+  .topbar { left: 8px; right: 8px; padding: 0 4px 0 8px; gap: 5px; }
+  .wordmark { display: none; }
+  .search-wrap { flex: 1 1 auto; max-width: none; }
+  .status-strip { display: none; }
+  .zoomstack { top: 70px; bottom: auto; right: 12px; }
+  .scalebar { display: none; }
   .bottom-bar { font-size: 10.5px; padding: 5px 10px; flex-wrap: nowrap; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
   .attribution { flex-wrap: nowrap; flex-shrink: 0; }
   .sources-inline .more .popover-body { bottom: calc(100% + 6px); }
-}
-
-/* ── Wide screens: colors and wallpaper as separate stacked cards on the
-   right; line spacing as its own bar along the top, between the search bar
-   and that stack; data sources folded into the bottom attribution strip;
-   nothing looks like one big sidebar. Below this, the search bar, the
-   sidebar and a middle top bar can't all fit side by side, so screens from
-   761 to 1099px keep the plain single sidebar (still with sources folded
-   into the bottom bar, which works at any width). ───────────────────────── */
-@media (min-width: 1100px) {
-  .panel { top: 14px; right: 14px; bottom: auto; max-height: calc(100vh - 28px); background: transparent; border: 0; box-shadow: none; }
-  .panel-scroll { display: grid; gap: 12px; overflow-y: auto; overflow-x: hidden; padding: 2px; margin: -2px; }
-  .panel .group { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); border-bottom: 0; min-width: 0; }
-
-  /* One continuous top bar: the search card and the line-spacing card sit
-     flush against each other (same background, no seam on the touching
-     edge, matching height) so they read as a single toolbar. */
-  .searchbar {
-    display: flex; flex-direction: column; justify-content: center; min-height: 120px;
-    border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0;
-  }
-  #lines-group {
-    position: fixed; left: 434px; right: 350px; top: 14px; bottom: auto; width: auto; min-height: 120px;
-    display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 22px;
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
-    border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 1px solid var(--border);
-  }
-  #lines-group #h-lines { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-  #lines-group > #wallpaper-size-field { min-width: 190px; }
-  #lines-group > #interval-field { min-width: 230px; }
-  #lines-group > .field-head { min-width: 0; white-space: nowrap; }
-  #lines-group > .slider-row { flex: 1 1 200px; min-width: 200px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
