@@ -12,7 +12,7 @@
       packages = forAll (pkgs: rec {
         topowall = pkgs.rustPlatform.buildRustPackage {
           pname = "topowall";
-          version = "0.2.1";
+          version = "0.2.2";
           src = self;
           cargoLock.lockFile = ./Cargo.lock;
           nativeBuildInputs = [ pkgs.makeWrapper ];
