@@ -9,7 +9,7 @@ import { parseTopo } from "../src/topo.js";
 import { ContourRenderer } from "../src/renderer-webgl.js";
 import { autoInterval, cloneTheme, indexEvery, resolveTheme, setSpacing, themeToToml } from "../src/theme.js";
 import { fromBase16, toTheme } from "../src/palette.js";
-import { ELEVATION_SOURCES, ENCODINGS, TerrainBuilder, TileCache, loadMosaic, lonLatOf, mercatorPx, plan } from "../src/terrain.js";
+import { ELEVATION_SOURCES, ENCODINGS, TerrainBuilder, TileCache, loadMosaic, lonLatOf, mercatorPx, plan, planView } from "../src/terrain.js";
 import { SEARCH_SOURCES, parseCoordinates, searchPlaces } from "../src/geocode.js";
 import { cleanEntry, exportThemes, importThemes, loadThemes, newId, saveThemes } from "../src/library.js";
 
@@ -213,7 +213,9 @@ function setView(lat, lon, mpp) {
   lon = ((((lon + 180) % 360) + 360) % 360) - 180;
   // Keep the on-screen zoom steady when moving north or south (Web Mercator).
   if (mpp === undefined) mpp = state.view.mpp * (Math.cos((lat * Math.PI) / 180) / Math.cos((oldLat * Math.PI) / 180));
-  state.view = { lat, lon, mpp: Math.max(MIN_MPP, Math.min(MAX_MPP, mpp)) };
+  // Keep the view at most about two worlds wide.
+  const widest = ((2 * 40075016.686 * Math.cos((lat * Math.PI) / 180)) / Math.max(1, canvas?.width ?? 1440));
+  state.view = { lat, lon, mpp: Math.max(MIN_MPP, Math.min(MAX_MPP, widest, mpp)) };
   viewChanged();
 }
 
@@ -227,7 +229,8 @@ function panBy(dx, dy) {
 /** Zoom by `factor` (>1 zooms out) keeping the point at device pixel (px, py) still. */
 function zoomAt(px, py, factor) {
   const W = canvas.width, H = canvas.height;
-  const target = Math.max(MIN_MPP, Math.min(MAX_MPP, state.view.mpp * factor));
+  const widest = (2 * 40075016.686 * Math.cos((state.view.lat * Math.PI) / 180)) / Math.max(1, canvas.width);
+  const target = Math.max(MIN_MPP, Math.min(MAX_MPP, widest, state.view.mpp * factor));
   factor = target / state.view.mpp;
   const m = mercPerDevPx();
   const [mx, my] = mercatorPx(state.view.lon, state.view.lat, 0);
@@ -312,7 +315,7 @@ function needsRebuild() {
 function scheduleRebuild(delay = 220) {
   clearTimeout(rebuildTimer);
   rebuildTimer = setTimeout(() => {
-    if (needsRebuild()) rebuild();
+    if (needsRebuild() || buildFailures) rebuild();
   }, delay);
 }
 
@@ -333,13 +336,14 @@ async function rebuild() {
   const W = canvas.width, H = canvas.height;
   const max = Math.min(builder.maxSize, 16384);
   const w = Math.min(max, Math.round(W * MARGIN)), h = Math.min(max, Math.round(H * MARGIN));
-  const { lat, lon, mpp } = state.view;
+  const { lat, lon } = state.view;
   const source = elevationSource();
   try {
-    let p = plan({ lat, lon, widthKm: (mpp * w) / 1000, widthPx: w, heightPx: h, maxZoom: source.maxZoom ?? 15, maxTiles: 900 });
+    const mercPerPx = mercPerDevPx();
+    let p = planView({ lat, lon, mercPerPx, widthPx: w, heightPx: h, maxZoom: source.maxZoom ?? 15 });
     // Small GPUs: use coarser tiles if the stitched tiles wouldn't fit in a texture.
     while ((p.cols * 256 > max || p.rows * 256 > max) && p.z > 0) {
-      p = plan({ lat, lon, widthKm: (mpp * w) / 1000, widthPx: w, heightPx: h, zoom: p.z - 1, maxTiles: 900 });
+      p = planView({ lat, lon, mercPerPx, widthPx: w, heightPx: h, maxZoom: p.z - 1 });
     }
     setProgress(0, p.cols * p.rows);
     const mosaic = await loadMosaic(p, source, tiles, { signal: abort.signal, onProgress: setProgress });
@@ -350,22 +354,39 @@ async function rebuild() {
     built = { plan: p, hm: { ...hm, min: summary.min, max: summary.max }, summary, W, H };
     renderer.setHeightTexture(built.hm);
     $("map-error").hidden = true;
+    buildFailures = 0;
     thumbs.invalidate();
     draw();
   } catch (err) {
     if (abort.signal.aborted || seq !== buildSeq || err.name === "AbortError") return;
     setProgress(1, 1);
+    buildFailures++;
+    // With a map already on screen, keep it and try again quietly a few times
+    // before saying anything; the first load reports problems right away.
+    if (built && buildFailures <= 3) {
+      scheduleRebuild(500 * 2 ** buildFailures);
+      return;
+    }
     showMapError(err);
   }
 }
 
+let buildFailures = 0;
+
 function showMapError(err) {
   const box = $("map-error");
   const source = elevationSource();
+  const retry = el("button", { type: "button", className: "btn small", textContent: "Try again" });
+  retry.addEventListener("click", () => {
+    box.hidden = true;
+    buildFailures = 0;
+    rebuild();
+  });
   box.replaceChildren(
     el("strong", { textContent: "Couldn't load elevation" }),
     el("div", { className: "hint", textContent: err.message }),
     el("div", { className: "hint", textContent: `Source: ${source.name}. Check your connection, or pick another source under Data sources.` }),
+    retry,
   );
   box.hidden = false;
 }
@@ -427,14 +448,19 @@ function frameRect() {
   const W = canvas.width, H = canvas.height;
   const { w, h } = outputSize();
   const panel = $("panel").getBoundingClientRect();
+  const pad = $("zoom").getBoundingClientRect();
   const dpr = W / canvas.clientWidth;
-  // Keep clear of the side panel on wide screens.
-  const rightInset = window.innerWidth > 760 ? (window.innerWidth - panel.left + 14) * dpr : 0;
-  const top = 78 * dpr, bottom = 50 * dpr, left = 24 * dpr;
-  const availW = Math.max(50, W - rightInset - left - 24 * dpr), availH = Math.max(50, H - top - bottom);
+  // Keep clear of the side panel and the pan/zoom control: the panel sits
+  // right-of-map on every width; the pad sits left-of-map (vertically
+  // centered) on wide screens, or top-of-map on narrow ones (see app.css).
+  const wide = window.innerWidth > 760;
+  const rightInset = wide ? (window.innerWidth - panel.left + 14) * dpr : 0;
+  const leftInset = wide ? (pad.right + 14) * dpr : 24 * dpr;
+  const top = (wide ? 78 : pad.bottom + 14) * dpr, bottom = 50 * dpr;
+  const availW = Math.max(50, W - rightInset - leftInset - 24 * dpr), availH = Math.max(50, H - top - bottom);
   const s = Math.min(availW / w, availH / h);
   const fw = w * s, fh = h * s;
-  const x = left + (availW - fw) / 2, y = top + (availH - fh) / 2;
+  const x = leftInset + (availW - fw) / 2, y = top + (availH - fh) / 2;
   return { x, y, w: fw, h: fh, outW: w, outH: h };
 }
 
@@ -503,7 +529,6 @@ function syncColorsUI() {
   $("palette-options").hidden = !!mine;
   $("mine-options").hidden = !mine;
   $("palette-save").hidden = !!mine;
-  $("swatch-edit-row").hidden = !mine;
   if (mine && document.activeElement !== $("mine-name")) $("mine-name").value = mine.name;
   setRadio("style", state.style);
   setRadio("background-mode", state.background);
@@ -700,6 +725,11 @@ function selectScheme(kind, name) {
   writeHash();
   draw();
   thumbs.markCurrent();
+}
+
+/** The current saved theme, creating one from the current scheme's colors first if needed. */
+function ensureMine() {
+  return currentMine() ?? saveAsMine();
 }
 
 /** Save the colors on screen as a new theme in this browser, and switch to it. */
@@ -1381,9 +1411,10 @@ function wirePanel() {
   }
   $("save-mine").addEventListener("click", saveAsMine);
   $("swatch-add-btn").addEventListener("click", () => {
-    const mine = currentMine();
     const c = $("swatch-add").value?.toLowerCase();
-    if (!mine || !c) return;
+    if (!c) return;
+    const mine = ensureMine();
+    if (!mine) return;
     if (mine.swatches.some((x) => sameColor(x, c))) {
       toast("That color is already in this theme");
       return;
@@ -1397,6 +1428,7 @@ function wirePanel() {
     colorsChanged();
   });
   $("swatch-edit").addEventListener("click", () => {
+    if (!ensureMine()) return;
     removingSwatches = !removingSwatches;
     renderSwatches();
   });

@@ -107,22 +107,22 @@
             <button type="button" role="radio" data-value="index">Index lines</button>
           </div>
           <div class="swatches" id="swatches" role="group" aria-labelledby="swatch-label"></div>
-          <div class="row spread" id="swatch-edit-row" hidden>
-            <topo-color-input id="swatch-add" label="New color"></topo-color-input>
+          <div class="row spread" id="swatch-edit-row">
+            <topo-color-input id="swatch-add" label="Color to add"></topo-color-input>
             <span class="row">
-              <button class="btn small" id="swatch-add-btn" type="button">Add color</button>
+              <button class="btn small" id="swatch-add-btn" type="button" aria-describedby="swatch-add-desc">+ Add color</button>
               <button class="btn small" id="swatch-edit" type="button" aria-pressed="false">Remove colors</button>
             </span>
           </div>
+          <span class="sr-only" id="swatch-add-desc">Picking a color and adding it starts your own copy of this scheme, saved in this browser.</span>
         </div>
 
-        <details class="more" id="customize">
-          <summary>Fine-tune colors</summary>
-          <div class="field">
-            <div class="field-head"><span id="bg-color-label">Background</span><topo-color-input id="background" label="Background color"></topo-color-input></div>
-            <div id="tiers" class="field"></div>
-          </div>
-        </details>
+        <div class="field colors-detail" id="customize">
+          <h3 class="sub-heading">Pick any color</h3>
+          <p class="hint">Click a swatch below to open the color wheel.</p>
+          <div class="field-head"><span id="bg-color-label">Background</span><topo-color-input id="background" label="Background color"></topo-color-input></div>
+          <div id="tiers" class="field"></div>
+        </div>
 
         <div class="field" id="mine-options" hidden>
           <div class="field-head">

@@ -76,7 +76,9 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 .results-note:not(:empty) { padding: 6px 14px 9px; border-top: 1px solid var(--border); }
 
 /* ── Zoom, scale, readout ────────────────────────────────────────────── */
-.mapctl { right: 350px; bottom: 44px; display: grid; overflow: hidden; justify-items: stretch; }
+/* Left side, vertically centered: pan and zoom live where they're easy to find
+   without crowding the wallpaper frame or the color/settings panel. */
+.mapctl { left: 14px; top: 50%; transform: translateY(-50%); display: grid; overflow: hidden; justify-items: stretch; }
 .mapctl > button, .pad button { min-width: 36px; height: 36px; border: 0; background: transparent; cursor: pointer; font-size: 18px; color: var(--text);
   display: grid; place-items: center; }
 .mapctl > button { border-top: 1px solid var(--border); }
@@ -148,6 +150,8 @@ input[type="range"] { accent-color: var(--accent); width: 100%; margin: 0; }
 .swatches .empty-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
 #mine-name { flex: 1; margin-left: 8px; }
 .scheme-card .delete { float: right; }
+.colors-detail { border-top: 1px solid var(--border); padding-top: 10px; }
+.sub-heading { margin: 0; font-size: 12px; font-weight: 650; color: var(--text); }
 .scheme-button { display: grid; gap: 7px; width: 100%; text-align: left; padding: 8px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); cursor: pointer; }
 .scheme-button:hover { border-color: rgba(255, 255, 255, .22); }
@@ -241,7 +245,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .55); }
   .panel-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 16px; border: 0;
     background: transparent; cursor: pointer; font-weight: 600; }
   .panel:not(.collapsed) .panel-toggle { border-bottom: 1px solid var(--border); }
-  .mapctl { right: 12px; bottom: auto; top: 70px; }
+  .mapctl { left: 12px; top: 70px; transform: none; }
   .readout { display: none; }
   .searchbar { left: 8px; top: 8px; width: calc(100vw - 16px); }
   .attribution { font-size: 10.5px; padding: 5px 10px; flex-wrap: nowrap; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }

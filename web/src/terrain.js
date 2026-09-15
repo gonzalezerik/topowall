@@ -64,6 +64,9 @@ export function plan(r) {
   const dlon = widthKm / (111.32 * cosLat);
   const dlat = (widthKm * h) / w / 110.57;
   const extent = { west: lon - dlon / 2, east: lon + dlon / 2, south: lat - dlat / 2, north: lat + dlat / 2 };
+  if (extent.north > 85.05 || extent.south < -85.05 || dlon > 360) {
+    throw new Error("this area reaches past the edge of the map (about 85° north or south); zoom in or make it smaller");
+  }
   const [x0, y0] = mercatorPx(extent.west, extent.north, z);
   const [x1, y1] = mercatorPx(extent.east, extent.south, z);
   const n = 2 ** z;
@@ -79,6 +82,46 @@ export function plan(r) {
     throw new Error(`this area needs ${cols * rows} tiles at zoom ${z} (limit ${maxTiles}); try a smaller area`);
   }
   return { z, w, h, mPerPx, extent, x0, y0, x1, y1, tx0, ty0, cols, rows };
+}
+
+/**
+ * Tiles and sampling for what's on screen, in Web Mercator like any web map.
+ * Unlike `plan` (which matches `topowall fetch`), this works at every zoom,
+ * including views wider or taller than the world.
+ * @param {{lat:number, lon:number, mercPerPx:number, widthPx:number, heightPx:number, maxZoom?:number}} r
+ *   mercPerPx: Web Mercator pixels at zoom 0 per output pixel.
+ */
+export function planView(r) {
+  const { lat, lon, mercPerPx, widthPx: w, heightPx: h } = r;
+  if (!(w > 0 && h > 0 && mercPerPx > 0)) throw new Error("the map view needs a size");
+  const maxZoom = r.maxZoom ?? 15;
+  // Tile zoom whose pixels are closest to screen pixels.
+  const z = Math.min(maxZoom, Math.max(0, Math.round(-Math.log2(mercPerPx))));
+  const n = 2 ** z;
+  const m = mercPerPx * n;
+  const [cx, cy] = mercatorPx(lon, Math.max(-85.05, Math.min(85.05, lat)), z);
+  const x0 = cx - (w / 2) * m, x1 = cx + (w / 2) * m;
+  const y0 = cy - (h / 2) * m, y1 = cy + (h / 2) * m;
+  const tx0 = Math.floor(x0 / TILE) - 1;
+  const tx1 = Math.floor(x1 / TILE) + 1;
+  // Rows outside the world repeat its top or bottom tiles (sampling clamps to the edge).
+  const ty0 = Math.min(n - 1, Math.max(0, Math.floor(y0 / TILE) - 1));
+  const ty1 = Math.max(ty0, Math.min(n - 1, Math.floor(y1 / TILE) + 1));
+  const earth = 40075016.686;
+  const mPerPx = (mercPerPx / TILE) * earth * Math.cos((lat * Math.PI) / 180);
+  const [west, north] = lonLatOf(x0, Math.max(0, y0), z);
+  const [east, south] = lonLatOf(x1, Math.min(n * TILE, y1), z);
+  const cols = tx1 - tx0 + 1, rows = ty1 - ty0 + 1;
+  // Guards against a caller asking for an unreasonably wide or tall mosaic (this
+  // shouldn't happen from the app's own UI, which keeps mercPerPx in a sane
+  // range, but a page must not trust its own state that much). Checked in
+  // pixels, not tile count: at low zoom `rows` is naturally capped to the
+  // world's own tile count near the poles, which would let a very wide,
+  // short request slip past a tile-count-only check.
+  if (cols * TILE > 20_000 || rows * TILE > 20_000) {
+    throw new Error(`this view needs too many tiles (${cols}x${rows} at zoom ${z}); zoom in a little`);
+  }
+  return { z, w, h, mPerPx, extent: { west, east, south, north }, x0, y0, x1, y1, tx0, ty0, cols, rows };
 }
 
 // ── Tiles ───────────────────────────────────────────────────────────────────
@@ -109,7 +152,17 @@ export class TileCache {
     if (!this.inflight.has(key)) {
       const url = source.url.replace("{z}", z).replace("{x}", x).replace("{y}", y);
       const job = (async () => {
-        const res = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer" });
+        // Retry brief network hiccups and busy servers; give up on anything else.
+        let res;
+        for (let attempt = 0; ; attempt++) {
+          try {
+            res = await fetch(url, { credentials: "omit", referrerPolicy: "no-referrer" });
+            if (res.ok || !(res.status === 429 || res.status >= 500) || attempt >= 3) break;
+          } catch (err) {
+            if (attempt >= 3) throw new Error(`couldn't reach ${new URL(url).host} (${err.message})`);
+          }
+          await new Promise((done) => setTimeout(done, 250 * 2 ** attempt));
+        }
         if (!res.ok) throw new Error(`${new URL(url).host} answered ${res.status} for tile ${z}/${x}/${y}`);
         const png = await decodePng(await res.arrayBuffer());
         if (png.width !== TILE || png.height !== TILE) throw new Error(`tile ${z}/${x}/${y} is ${png.width}×${png.height}, expected 256×256`);
