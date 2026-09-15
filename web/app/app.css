@@ -121,6 +121,17 @@ input[type="range"] { accent-color: var(--accent); width: 100%; margin: 0; }
 .stepper { display: inline-flex; align-items: center; gap: 4px; }
 .stepper input { width: 50px; text-align: center; }
 
+.segmented.small button { padding: 3px 7px; font-size: 12px; }
+.swatches { display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+.swatch { position: relative; aspect-ratio: 1; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .14); cursor: pointer; padding: 0; }
+.swatch:hover { transform: scale(1.08); }
+.swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
+.swatches.removing .swatch::after { content: "×"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 16px;
+  color: #fff; background: rgba(0, 0, 0, .45); border-radius: 5px; }
+.swatches .empty-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+#mine-name { flex: 1; margin-left: 8px; }
+.scheme-card .delete { float: right; }
 .scheme-button { display: grid; gap: 7px; width: 100%; text-align: left; padding: 8px; border-radius: 10px; border: 1px solid var(--border);
   background: var(--surface); cursor: pointer; }
 .scheme-button:hover { border-color: rgba(255, 255, 255, .22); }

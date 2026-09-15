@@ -73,14 +73,46 @@
             </div>
           </div>
         </div>
+
+        <div class="field" id="swatch-panel">
+          <span class="dim"><span id="swatch-label">Scheme colors</span>: click one to use it for</span>
+          <div class="segmented small" role="radiogroup" aria-label="Apply a color to" id="swatch-target">
+            <button type="button" role="radio" data-value="background">Background</button>
+            <button type="button" role="radio" data-value="lines">Lines</button>
+            <button type="button" role="radio" data-value="index">Index lines</button>
+          </div>
+          <div class="swatches" id="swatches" role="group" aria-label="Colors: click one to apply it"></div>
+          <div class="row spread" id="swatch-edit-row" hidden>
+            <topo-color-input id="swatch-add" title="Pick a color, then Add"></topo-color-input>
+            <span class="row">
+              <button class="btn small" id="swatch-add-btn" type="button">Add</button>
+              <button class="btn small" id="swatch-edit" type="button" aria-pressed="false" title="Remove colors from this theme">Remove…</button>
+            </span>
+          </div>
+        </div>
+
         <details class="more" id="customize">
-          <summary>Customize colors</summary>
+          <summary>Fine-tune colors</summary>
           <div class="field">
             <div class="field-head"><span>Background</span><topo-color-input id="background"></topo-color-input></div>
             <div id="tiers" class="field"></div>
-            <button class="btn small" id="reset-colors" type="button" hidden>Undo customizations</button>
           </div>
         </details>
+
+        <div class="field" id="mine-options" hidden>
+          <div class="field-head">
+            <label for="mine-name">Name</label>
+            <input type="text" id="mine-name" maxlength="60" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="row spread">
+            <span class="hint">Saved in this browser only</span>
+            <button class="btn small" id="mine-delete" type="button">Delete theme</button>
+          </div>
+        </div>
+        <div class="row" id="palette-save">
+          <button class="btn small" id="save-mine" type="button">Save as my theme</button>
+          <button class="btn small" id="reset-colors" type="button" hidden>Undo color changes</button>
+        </div>
       </section>
 
       <section class="group">
@@ -170,9 +202,9 @@
             <li>No accounts, cookies, analytics or tracking. This site has no server-side code; it only sends these files.</li>
             <li>Maps are drawn on your own device. Your browser downloads elevation tiles directly from the elevation source above, and sends place searches to the search service when you press Enter. Those services see your IP address, as any website does.</li>
             <li>The place you're looking at is kept in the address after <span class="mono">#</span>, which browsers never send to servers.</li>
-            <li>Your settings are saved in this browser only.</li>
+            <li>Your settings and the themes you save stay in this browser only. Backups are files you download and open yourself.</li>
           </ul>
-          <button class="btn small" id="forget" type="button">Forget my settings</button>
+          <button class="btn small" id="forget" type="button" title="Clears settings and recent colors. Saved themes are kept; delete them from each theme.">Forget my settings</button>
         </details>
       </section>
     </div>
@@ -185,7 +217,7 @@
       <h3 id="schemes-title">Colors</h3>
       <div class="tabs" role="tablist">
         <button class="btn small" role="tab" id="tab-palettes" type="button" aria-pressed="true">Color schemes</button>
-        <button class="btn small" role="tab" id="tab-themes" type="button" aria-pressed="false">Themes</button>
+        <button class="btn small" role="tab" id="tab-themes" type="button" aria-pressed="false">My themes</button>
       </div>
       <button class="icon-btn" id="schemes-close" type="button" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
@@ -197,6 +229,14 @@
         <span class="dim" id="scheme-count"></span>
       </div>
       <div class="tag-groups" id="tag-groups"></div>
+      <div class="row spread" id="mine-tools" hidden>
+        <span class="hint">Your themes are saved in this browser only. Back them up to move them to another browser.</span>
+        <span class="row">
+          <button class="btn small primary" id="mine-new" type="button">New theme from current colors</button>
+          <button class="btn small" id="mine-export" type="button">Back up</button>
+          <label class="btn small">Restore<input type="file" id="mine-import" accept=".json,application/json" hidden></label>
+        </span>
+      </div>
     </div>
     <div class="scheme-grid" id="scheme-grid"></div>
   </dialog>

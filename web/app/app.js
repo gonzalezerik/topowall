@@ -11,6 +11,7 @@ import { autoInterval, cloneTheme, indexEvery, resolveTheme, setSpacing, themeTo
 import { fromBase16, toTheme } from "../src/palette.js";
 import { ELEVATION_SOURCES, ENCODINGS, TerrainBuilder, TileCache, loadMosaic, lonLatOf, mercatorPx, plan } from "../src/terrain.js";
 import { SEARCH_SOURCES, parseCoordinates, searchPlaces } from "../src/geocode.js";
+import { cleanEntry, exportThemes, importThemes, loadThemes, newId, saveThemes } from "../src/library.js";
 
 const $ = (id) => document.getElementById(id);
 const STORE_KEY = "topowall.app";
@@ -29,10 +30,11 @@ const TAG_GROUPS = [
 
 const state = {
   view: null,                 // { lat, lon, mpp } — mpp: metres per device pixel at the centre
-  scheme: { kind: "theme", name: "3e5d58-92aca0" },
+  scheme: { kind: "palette", name: "rose-pine" },  // kind: "palette" (built-in scheme) or "mine" (saved in this browser)
   style: "subtle",
   background: "palette",
-  custom: null,               // a full theme once the visitor edits colors
+  custom: null,               // a full theme once the visitor edits a built-in scheme's colors
+  swatchTarget: "lines",      // what clicking a swatch colors: background, lines or index
   auto: true,
   interval: 20,
   indexEvery: 5,
@@ -44,7 +46,7 @@ const state = {
 };
 
 let palettes = [];   // catalog entries: { name, title, tags, colors }
-let themes = [];     // { id, theme }
+let myThemes = [];   // themes made in this browser (see src/library.js)
 let renderer, builder, canvas;
 const tiles = new TileCache(400);
 let built = null;    // { plan, hm, summary, W, H }
@@ -86,8 +88,8 @@ const store = {
   },
   save() {
     try {
-      const { scheme, style, background, custom, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search } = state;
-      localStorage.setItem(STORE_KEY, JSON.stringify({ scheme, style, background, custom, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search }));
+      const { scheme, style, background, custom, swatchTarget, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search } = state;
+      localStorage.setItem(STORE_KEY, JSON.stringify({ scheme, style, background, custom, swatchTarget, auto, interval, indexEvery: n, smoothM, output, showFrame, elevation, search }));
     } catch {
       /* storage unavailable */
     }
@@ -108,13 +110,13 @@ function searchSource() {
 
 // ── Theme ───────────────────────────────────────────────────────────────────
 
+const currentPalette = () => palettes.find((x) => x.name === state.scheme.name) ?? palettes[0];
+const currentMine = () => (state.scheme.kind === "mine" ? myThemes.find((t) => t.id === state.scheme.name) : null);
+
 function baseTheme() {
-  const { scheme } = state;
-  if (scheme.kind === "palette") {
-    const p = palettes.find((x) => x.name === scheme.name) ?? palettes[0];
-    return toTheme(fromBase16(p), { style: state.style, background: state.background });
-  }
-  return cloneTheme((themes.find((t) => t.id === scheme.name) ?? themes[0]).theme);
+  const mine = currentMine();
+  if (mine) return cloneTheme(mine.theme);
+  return toTheme(fromBase16(currentPalette()), { style: state.style, background: state.background });
 }
 
 /** The theme to draw, with spacing applied. `texPerPx` and `summary` give the auto interval. */
@@ -126,17 +128,27 @@ function currentTheme(summary, texPerPx = 1) {
 }
 
 function schemeLabel() {
-  const { scheme } = state;
-  if (scheme.kind === "palette") return palettes.find((x) => x.name === scheme.name)?.title ?? scheme.name;
-  return themes.find((t) => t.id === scheme.name)?.theme.name ?? scheme.name;
+  return currentMine()?.name ?? currentPalette().title;
 }
 
-function schemeStripColors() {
-  if (state.scheme.kind === "palette") return palettes.find((x) => x.name === state.scheme.name)?.colors ?? [];
-  const t = state.custom ?? baseTheme();
+/** Colors of a theme itself: background, then each line color. */
+function themeColors(t) {
   const colors = [t.background];
   for (const l of t.lines ?? []) colors.push(...(Array.isArray(l.color) ? l.color.map((s) => s.color) : [l.color]));
   return colors;
+}
+
+/** The colors offered as swatches: the scheme's palette, or a saved theme's own colors. */
+function swatchColors() {
+  const mine = currentMine();
+  if (mine) return mine.swatches;
+  return [...new Set(currentPalette().colors.map((c) => c.toLowerCase()))];
+}
+
+function schemeStripColors() {
+  const mine = currentMine();
+  if (mine) return mine.swatches.length ? mine.swatches : themeColors(mine.theme);
+  return currentPalette().colors;
 }
 
 function fillStrip(strip, colors) {
@@ -217,7 +229,7 @@ function readHash() {
   const c = q.get("colors");
   if (c) {
     const [kind, name, style, background] = c.split(":");
-    if ((kind === "palette" || kind === "theme") && name) out.colors = { kind, name, style, background };
+    if ((kind === "palette" || kind === "mine") && name) out.colors = { kind, name, style, background };
   }
   return out;
 }
@@ -231,7 +243,7 @@ function writeHash() {
     const q = new URLSearchParams();
     q.set("at", `${lat.toFixed(5)},${lon.toFixed(5)},${+mpp.toPrecision(4)}`);
     const s = state.scheme;
-    q.set("colors", s.kind === "palette" ? `palette:${s.name}:${state.style}:${state.background}` : `theme:${s.name}`);
+    q.set("colors", s.kind === "palette" ? `palette:${s.name}:${state.style}:${state.background}` : `mine:${s.name}`);
     history.replaceState(null, "", `#${q.toString().replaceAll("%2C", ",").replaceAll("%3A", ":")}`);
   }, 250);
 }
@@ -437,16 +449,106 @@ function setRadio(groupId, value) {
 }
 
 function syncColorsUI() {
-  $("scheme-name").textContent = schemeLabel() + (state.custom ? " (customized)" : "");
+  const mine = currentMine();
+  $("scheme-name").textContent = schemeLabel() + (state.custom ? " (changed)" : "");
   fillStrip($("scheme-strip"), schemeStripColors());
-  const isPalette = state.scheme.kind === "palette";
-  $("palette-options").hidden = !isPalette;
+  $("palette-options").hidden = !!mine;
+  $("mine-options").hidden = !mine;
+  $("palette-save").hidden = !!mine;
+  $("swatch-edit-row").hidden = !mine;
+  if (mine && document.activeElement !== $("mine-name")) $("mine-name").value = mine.name;
   setRadio("style", state.style);
   setRadio("background-mode", state.background);
   $("reset-colors").hidden = !state.custom;
-  const t = state.custom ?? baseTheme();
+  const t = editableView();
   $("background").value = t.background ?? "#000000";
   buildTiers(t);
+  renderSwatches();
+}
+
+/** The colors being shown: a saved theme, or a built-in scheme with any changes. */
+function editableView() {
+  return currentMine()?.theme ?? state.custom ?? baseTheme();
+}
+
+/** After changing colors: save them and redraw. */
+function colorsChanged({ rebuildPanel = false } = {}) {
+  const mine = currentMine();
+  if (mine) {
+    mine.theme.name = mine.name;
+    persistMine();
+  } else {
+    store.save();
+  }
+  $("scheme-name").textContent = schemeLabel() + (state.custom ? " (changed)" : "");
+  $("reset-colors").hidden = !state.custom;
+  fillStrip($("scheme-strip"), schemeStripColors());
+  if (rebuildPanel) syncColorsUI();
+  else renderSwatches();
+  lastResolvedKey = "";
+  draw();
+  thumbs.invalidate();
+}
+
+function persistMine() {
+  if (!saveThemes(myThemes)) toast("This browser didn't save your themes (storage is full or turned off)", true);
+}
+
+// ── Swatches ────────────────────────────────────────────────────────────────
+
+const sameColor = (a, b) => typeof a === "string" && typeof b === "string" && a.toLowerCase() === b.toLowerCase();
+
+function targetColor(theme, target) {
+  if (target === "background") return theme.background;
+  const tier = theme.lines?.[target === "index" ? 1 : 0];
+  return tier && !Array.isArray(tier.color) ? tier.color : null;
+}
+
+function applySwatch(color) {
+  const t = editable();
+  const target = state.swatchTarget;
+  if (target === "background") {
+    t.background = color;
+  } else {
+    const tier = t.lines[target === "index" ? 1 : 0];
+    if (!tier) return;
+    tier.color = color;
+  }
+  colorsChanged({ rebuildPanel: true });
+}
+
+let removingSwatches = false;
+
+function renderSwatches() {
+  const box = $("swatches");
+  const theme = editableView();
+  const hasIndex = (theme.lines?.length ?? 0) >= 2;
+  if (!hasIndex && state.swatchTarget === "index") state.swatchTarget = "lines";
+  $("swatch-target").querySelector('[data-value="index"]').hidden = !hasIndex;
+  setRadio("swatch-target", state.swatchTarget);
+  const mine = currentMine();
+  $("swatch-label").textContent = mine ? "Theme colors" : "Scheme colors";
+  box.classList.toggle("removing", !!mine && removingSwatches);
+  $("swatch-edit").setAttribute("aria-pressed", String(!!mine && removingSwatches));
+  const current = targetColor(theme, state.swatchTarget);
+  const colors = swatchColors();
+  const buttons = colors.map((c) => {
+    const b = el("button", { type: "button", className: "swatch", title: c });
+    b.style.background = c;
+    b.setAttribute("aria-label", c);
+    b.setAttribute("aria-pressed", String(sameColor(c, current)));
+    b.addEventListener("click", () => {
+      if (mine && removingSwatches) {
+        mine.swatches = mine.swatches.filter((x) => !sameColor(x, c));
+        colorsChanged();
+        return;
+      }
+      applySwatch(c);
+    });
+    return b;
+  });
+  if (!colors.length) buttons.push(el("span", { className: "empty-note", textContent: "No colors yet. Pick one below and press Add." }));
+  box.replaceChildren(...buttons);
 }
 
 function tierLabel(i) {
@@ -463,13 +565,11 @@ function sliderRow(label, min, max, step, value, onInput, format) {
   return el("label", { className: "slider-row" }, el("span", { textContent: label }), input, out);
 }
 
-/** Start customizing: copy the current colors into an editable theme. */
+/** The theme to edit: a saved theme directly, or a copy of a built-in scheme's colors. */
 function editable() {
-  if (!state.custom) {
-    state.custom = baseTheme();
-    $("reset-colors").hidden = false;
-    $("scheme-name").textContent = `${schemeLabel()} (customized)`;
-  }
+  const mine = currentMine();
+  if (mine) return mine.theme;
+  if (!state.custom) state.custom = baseTheme();
   return state.custom;
 }
 
@@ -490,10 +590,7 @@ function buildTiers(theme) {
     const card = el("div", { className: "tier" }, el("div", { className: "tier-title", textContent: tierLabel(i) }));
     const update = (fn) => {
       fn(editable().lines[i]);
-      store.save();
-      fillStrip($("scheme-strip"), schemeStripColors());
-      draw();
-      thumbs.invalidate();
+      colorsChanged();
     };
     if (Array.isArray(tier.color)) {
       tier.color.forEach((stop, si) => {
@@ -535,6 +632,7 @@ function syncLinesUI(theme) {
 function selectScheme(kind, name) {
   state.scheme = { kind, name };
   state.custom = null;
+  removingSwatches = false;
   const base = baseTheme();
   if (base.lines?.length >= 2) state.indexEvery = indexEvery(base) ?? state.indexEvery;
   syncColorsUI();
@@ -542,6 +640,25 @@ function selectScheme(kind, name) {
   writeHash();
   draw();
   thumbs.markCurrent();
+}
+
+/** Save the colors on screen as a new theme in this browser, and switch to it. */
+function saveAsMine() {
+  const theme = cloneTheme(editableView());
+  const base = currentMine() ? null : currentPalette();
+  const name = currentMine() ? `${currentMine().name} copy` : `${base.title}${state.custom ? " (mine)" : ` ${state.style}`}`;
+  const swatches = [...new Set([...swatchColors(), ...themeColors(theme)].map((c) => c.toLowerCase()))].slice(0, 32);
+  const entry = cleanEntry({ id: newId(), name, theme, swatches });
+  if (!entry) {
+    toast("These colors can't be saved as a theme", true);
+    return null;
+  }
+  myThemes.unshift(entry);
+  persistMine();
+  thumbs.refreshMine();
+  selectScheme("mine", entry.id);
+  toast(`Saved "${entry.name}" in this browser`);
+  return entry;
 }
 
 function renderSources() {
@@ -570,7 +687,7 @@ const thumbs = (() => {
   let generation = 0;
   const queue = new Set();
   const visible = new Set();
-  let observer, raf = 0, tab = "palettes";
+  let observer, raf = 0, tab = "palettes", makeCard = null;
   const cards = new Map();
   const filter = { text: "", tags: new Set() };
 
@@ -591,7 +708,7 @@ const thumbs = (() => {
     if (card.kind === "palette") {
       return toTheme(fromBase16(card.palette), { style: state.style, background: state.background });
     }
-    return cloneTheme(card.theme);
+    return cloneTheme(myThemes.find((t) => t.id === card.key)?.theme ?? card.theme);
   }
 
   function paint(card) {
@@ -679,14 +796,12 @@ const thumbs = (() => {
       observer.observe(button);
       return button;
     };
+    makeCard = make;
     grid.replaceChildren(
       ...palettes.map((p) => make("palette", p.name, p.title, p.tags, p.colors, { palette: p })),
-      ...themes.map((t) => {
-        const colors = [t.theme.background, ...t.theme.lines.flatMap((l) => (Array.isArray(l.color) ? l.color.map((s) => s.color) : [l.color]))];
-        return make("theme", t.id, t.theme.name ?? t.id, ["theme"], colors, { theme: t.theme });
-      }),
-      el("div", { className: "empty", id: "scheme-empty", hidden: true, textContent: "No color schemes match." }),
+      el("div", { className: "empty", id: "scheme-empty", hidden: true }),
     );
+    addMineCards();
 
     const groups = $("tag-groups");
     for (const group of TAG_GROUPS) {
@@ -718,13 +833,35 @@ const thumbs = (() => {
     }
   }
 
+  function addMineCards() {
+    for (const [button, card] of cards) {
+      if (card.kind === "mine") {
+        observer.unobserve(button);
+        visible.delete(card);
+        queue.delete(card);
+        cards.delete(button);
+        button.remove();
+      }
+    }
+    const empty = $("scheme-empty");
+    for (const t of myThemes) {
+      const b = makeCard("mine", t.id, t.name, [], t.swatches.length ? t.swatches : themeColors(t.theme), { theme: t.theme });
+      // Saved themes are named by the visitor: show the name, not the id.
+      b.querySelector(".name").textContent = t.name;
+      b.querySelector(".title").textContent = `${t.swatches.length} colors`;
+      b.querySelector(".tags").textContent = "saved in this browser";
+      empty.before(b);
+    }
+  }
+
   function applyFilter() {
     const q = squash(filter.text);
     let shown = 0, total = 0;
     for (const card of cards.values()) {
       const inTab = (card.kind === "palette") === (tab === "palettes");
+      const title = card.kind === "mine" ? myThemes.find((t) => t.id === card.key)?.name ?? card.title : card.title;
       const match = inTab && [...filter.tags].every((t) => card.tags.includes(t)) &&
-        (!q || squash(card.key).includes(q) || squash(card.title).includes(q));
+        (!q || (card.kind === "palette" && squash(card.key).includes(q)) || squash(title).includes(q));
       card.button.hidden = !match;
       if (inTab) total++;
       if (match) shown++;
@@ -732,7 +869,11 @@ const thumbs = (() => {
     $("tab-palettes").setAttribute("aria-pressed", String(tab === "palettes"));
     $("tab-themes").setAttribute("aria-pressed", String(tab === "themes"));
     $("tag-groups").hidden = tab !== "palettes";
+    $("mine-tools").hidden = tab !== "themes";
     $("scheme-count").textContent = `${shown} of ${total}`;
+    $("scheme-empty").textContent = tab === "themes" && !total
+      ? "You haven't saved any themes yet. Pick a color scheme, change its colors if you like, and choose Save as my theme."
+      : "Nothing matches.";
     $("scheme-empty").hidden = shown > 0;
     for (const c of $("tag-groups").querySelectorAll(".chip")) c.setAttribute("aria-pressed", String(filter.tags.has(c.dataset.tag)));
   }
@@ -740,7 +881,7 @@ const thumbs = (() => {
   return {
     open() {
       if (!observer) build();
-      tab = state.scheme.kind === "theme" ? "themes" : "palettes";
+      tab = state.scheme.kind === "mine" ? "themes" : "palettes";
       applyFilter();
       this.markCurrent();
       $("schemes").showModal();
@@ -751,6 +892,16 @@ const thumbs = (() => {
     invalidate() {
       generation++;
       for (const card of visible) request(card);
+    },
+    refreshMine() {
+      if (!observer) return;
+      addMineCards();
+      applyFilter();
+      this.markCurrent();
+    },
+    showTab(name) {
+      tab = name;
+      applyFilter();
     },
     markCurrent() {
       for (const card of cards.values()) {
@@ -841,8 +992,6 @@ function cliCommands(center, outW, outH, theme) {
   if (!state.custom && state.scheme.kind === "palette") {
     const bg = state.background === "black" ? " --background black" : "";
     lines.push(`topowall render ${input} --palette ${state.scheme.name} --style ${state.style}${bg}${spacing}${index}${size} -o wallpaper.png`);
-  } else if (!state.custom && state.scheme.kind === "theme") {
-    lines.push(`topowall render ${input} --theme ${state.scheme.name}${spacing}${index}${size} -o wallpaper.png`);
   } else {
     lines.push(`topowall render ${input} --theme theme.toml${size} -o wallpaper.png   # theme.toml: download it above`);
   }
@@ -938,7 +1087,8 @@ async function createWallpaper() {
     exportTheme = theme;
     const img = el("img", { src: exportUrl, alt: "Wallpaper preview" });
     preview.replaceChildren(img);
-    const name = `topowall-${(state.custom ? "custom" : state.scheme.name).replace(/[^a-z0-9-]+/gi, "-")}-${w}x${h}.png`;
+    const label = currentMine()?.name ?? (state.custom ? "custom" : state.scheme.name);
+    const name = `topowall-${label.replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "theme"}-${w}x${h}.png`;
     Object.assign($("download-png"), { href: exportUrl, download: name, hidden: false });
     const where = file ? file.name : `${center.lat.toFixed(4)}, ${center.lon.toFixed(4)} · ${center.widthKm.toFixed(2)} km wide`;
     $("export-info").textContent = `${w} × ${h} · ${where} · lines every ${fmt(theme.lines[0].every)} m · ${(blob.size / 1e6).toFixed(1)} MB`;
@@ -1102,15 +1252,94 @@ function wirePanel() {
   }
   $("background").addEventListener("input", (e) => {
     editable().background = e.target.value;
-    store.save();
-    fillStrip($("scheme-strip"), schemeStripColors());
-    draw();
+    colorsChanged();
   });
   $("reset-colors").addEventListener("click", () => {
     state.custom = null;
-    syncColorsUI();
-    store.save();
-    draw();
+    colorsChanged({ rebuildPanel: true });
+  });
+  for (const b of $("swatch-target").querySelectorAll("button")) {
+    b.addEventListener("click", () => {
+      state.swatchTarget = b.dataset.value;
+      store.save();
+      renderSwatches();
+    });
+  }
+  $("save-mine").addEventListener("click", saveAsMine);
+  $("swatch-add-btn").addEventListener("click", () => {
+    const mine = currentMine();
+    const c = $("swatch-add").value?.toLowerCase();
+    if (!mine || !c) return;
+    if (mine.swatches.some((x) => sameColor(x, c))) {
+      toast("That color is already in this theme");
+      return;
+    }
+    if (mine.swatches.length >= 32) {
+      toast("A theme can hold up to 32 colors", true);
+      return;
+    }
+    mine.swatches.push(c);
+    removingSwatches = false;
+    colorsChanged();
+  });
+  $("swatch-edit").addEventListener("click", () => {
+    removingSwatches = !removingSwatches;
+    renderSwatches();
+  });
+  $("mine-name").addEventListener("input", (e) => {
+    const mine = currentMine();
+    if (!mine) return;
+    mine.name = e.target.value.trim().slice(0, 60) || "Untitled";
+    colorsChanged();
+    thumbs.refreshMine();
+  });
+  let deleteArmed = 0;
+  $("mine-delete").addEventListener("click", () => {
+    const mine = currentMine();
+    if (!mine) return;
+    if (Date.now() - deleteArmed > 4000) {
+      deleteArmed = Date.now();
+      $("mine-delete").textContent = "Click again to delete";
+      setTimeout(() => ($("mine-delete").textContent = "Delete theme"), 4000);
+      return;
+    }
+    myThemes = myThemes.filter((t) => t.id !== mine.id);
+    persistMine();
+    $("mine-delete").textContent = "Delete theme";
+    selectScheme("palette", palettes.some((p) => p.name === "rose-pine") ? "rose-pine" : palettes[0].name);
+    thumbs.refreshMine();
+    toast(`Deleted "${mine.name}"`);
+  });
+  $("mine-new").addEventListener("click", () => {
+    if (saveAsMine()) $("schemes").close();
+  });
+  $("mine-export").addEventListener("click", () => {
+    if (!myThemes.length) {
+      toast("There are no saved themes to back up");
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([exportThemes(myThemes)], { type: "application/json" }));
+    el("a", { href: url, download: "topowall-themes.json" }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  $("mine-import").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      if (f.size > 2_000_000) throw new Error("the file is too large for a theme backup");
+      const { themes: added, skipped } = importThemes(await f.text());
+      const names = new Set(myThemes.map((t) => t.name));
+      for (const t of added) {
+        if (names.has(t.name)) t.name = t.theme.name = `${t.name} (restored)`.slice(0, 60);
+      }
+      myThemes = [...added, ...myThemes].slice(0, 200);
+      persistMine();
+      thumbs.refreshMine();
+      toast(`Restored ${added.length} theme${added.length === 1 ? "" : "s"}${skipped ? ` (${skipped} skipped)` : ""}`);
+    } catch (err) {
+      toast(`Couldn't restore: ${err.message}`, true);
+    }
   });
 
   const setInterval_ = (m) => {
@@ -1342,16 +1571,12 @@ async function init() {
     return;
   }
 
-  const [catalog, themeList] = await Promise.all([
-    fetch("data/palettes.json").then((r) => r.json()),
-    fetch("data/themes.json").then((r) => r.json()),
-  ]);
-  palettes = catalog.palettes;
-  themes = themeList;
+  palettes = (await fetch("data/palettes.json").then((r) => r.json())).palettes;
+  myThemes = loadThemes();
 
   const saved = store.load();
   if (saved) {
-    for (const k of ["scheme", "style", "background", "custom", "auto", "interval", "indexEvery", "smoothM", "output", "showFrame", "elevation", "search"]) {
+    for (const k of ["scheme", "style", "background", "custom", "swatchTarget", "auto", "interval", "indexEvery", "smoothM", "output", "showFrame", "elevation", "search"]) {
       if (saved[k] !== undefined && saved[k] !== null) state[k] = saved[k];
     }
     if (saved.custom === null) state.custom = null;
@@ -1363,7 +1588,7 @@ async function init() {
   const hash = readHash();
   if (hash.colors) {
     const { kind, name, style, background } = hash.colors;
-    const exists = kind === "palette" ? palettes.some((p) => p.name === name) : themes.some((t) => t.id === name);
+    const exists = kind === "palette" ? palettes.some((p) => p.name === name) : myThemes.some((t) => t.id === name);
     if (exists) {
       state.scheme = { kind, name };
       if (style && ["subtle", "vivid", "mono"].includes(style)) state.style = style;
@@ -1371,10 +1596,14 @@ async function init() {
       state.custom = null;
     }
   }
-  if (state.scheme.kind === "palette" ? !palettes.some((p) => p.name === state.scheme.name) : !themes.some((t) => t.id === state.scheme.name)) {
-    state.scheme = { kind: "theme", name: themes[0].id };
+  if (hash.colors?.kind === "mine" && !myThemes.some((t) => t.id === hash.colors.name)) {
+    toast("That link uses a theme saved in someone else's browser, so its colors can't be shown here");
+  }
+  if (state.scheme.kind === "palette" ? !palettes.some((p) => p.name === state.scheme.name) : !myThemes.some((t) => t.id === state.scheme.name)) {
+    state.scheme = { kind: "palette", name: palettes.some((p) => p.name === "rose-pine") ? "rose-pine" : palettes[0].name };
     state.custom = null;
   }
+  if (!["background", "lines", "index"].includes(state.swatchTarget)) state.swatchTarget = "lines";
 
   sizeCanvas();
   const v = hash.view;

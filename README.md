@@ -489,12 +489,17 @@ of the CLI's shader, so a wallpaper saved in the browser matches what
 - **Search:** type coordinates (`37.738, -119.575`, `37°44'17"N 119°34'30"W`)
   to jump straight there, or a place name and press Enter to ask the search
   service. Results zoom to fit the place.
-- **Colors:** **Browse** opens all 339 color schemes and the built-in themes,
-  each drawn as a small preview of the area you're looking at. Filter by name
-  or by tag (dark, light, muted, vivid, warm, cool, hue…). For color schemes,
-  pick **Subtle**, **Vivid** or **Mono** lines and the scheme's background or
-  black. **Customize colors** edits the background and each line tier's color,
-  width and opacity.
+- **Colors:** **Browse** opens all 339 color schemes, each drawn as a small
+  preview of the area you're looking at. Filter by name or by tag (dark,
+  light, muted, vivid, warm, cool, hue…), and pick **Subtle**, **Vivid** or
+  **Mono** lines and the scheme's background or black. Every color in the
+  scheme is shown as a swatch: choose **Background**, **Lines** or
+  **Index lines** and click a swatch to use it there. **Fine-tune colors**
+  sets any color, plus each line tier's width and opacity.
+- **My themes:** **Save as my theme** keeps the colors on screen, with their
+  swatches, as your own theme. Rename it, add or remove swatches, and it saves
+  as you go. Themes live in your browser only; **Back up** downloads them as a
+  file and **Restore** opens one, so you can move them to another browser.
 - **Lines:** **Auto** picks the spacing for the current zoom, or set it
   yourself. **Index line every** sets how many lines make a bold one.
   **Smoothing** softens small bumps in the data (same as `--smooth-m`).
@@ -524,8 +529,9 @@ it contacts only the services shown under **Data sources**:
   address.
 - The place and zoom live in the part of the address after `#`, which browsers
   never send to servers.
-- Settings are kept in your browser's local storage, and **Forget my settings**
-  clears them.
+- Settings and your themes are kept in your browser's local storage.
+  **Forget my settings** clears settings; delete themes one by one. Theme
+  backups are files you download and open yourself; nothing is uploaded.
 - The page's Content-Security-Policy lets it run only its own scripts and
   styles.
 
@@ -608,7 +614,7 @@ open the file as a grayscale height image.
 cargo test --workspace      # Rust tests, including renders on your GPU
 # pick the adapter for the GPU tests, e.g. TOPOWALL_BACKEND=gl or TOPOWALL_GPU=intel
 cargo clippy --workspace -- -D warnings
-node --test web/test/*.test.js   # web tests: color math, scheme colors vs the CLI, coordinates
+node --test web/test/*.test.js   # web tests: color math, scheme colors vs the CLI, coordinates, saved themes
 
 # Browser tests: serve the repo, then open these pages (the title says PASS/FAIL)
 python3 -m http.server 8000
@@ -620,7 +626,7 @@ python3 -m http.server 8000
 cargo build --release
 scripts/gallery.sh          # regenerate docs/gallery
 cargo run -p topowall-kit --example palette-catalog   # regenerate crates/kit/palettes/palettes.json
-scripts/web-presets.sh      # regenerate the web app's themes and palette data (and web test fixtures)
+scripts/web-presets.sh      # regenerate the web app's palette data and web test fixtures
 scripts/web-dist.sh dist    # assemble the web app as static files
 ```
 

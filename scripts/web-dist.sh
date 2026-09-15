@@ -14,10 +14,9 @@ mkdir -p "$out/src" "$out/data"
 cp web/app/index.html web/app/app.css web/app/favicon.svg "$out/"
 # The app imports ../src/ in the repository layout; in the folder, src/ sits next to it.
 sed 's#"\.\./src/#"./src/#g' web/app/app.js > "$out/app.js"
-for f in color.js color-picker.js geocode.js palette.js png.js renderer-webgl.js terrain.js theme.js topo.js; do
+for f in color.js color-picker.js geocode.js library.js palette.js png.js renderer-webgl.js terrain.js theme.js topo.js; do
   cp "web/src/$f" "$out/src/"
 done
-cp web/app/data/themes.json "$out/data/"
 cp crates/kit/palettes/palettes.json "$out/data/palettes.json"
 cp LICENSE "$out/LICENSE.txt"
 cp crates/kit/palettes/LICENSE-tinted-theming "$out/LICENSE-tinted-theming.txt"
