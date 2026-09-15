@@ -1,0 +1,21 @@
+# Container image for the topowall web app: static files behind nginx,
+# served at /topowall/ on port 8080.
+#
+#   podman build -f deploy/Containerfile -t topowall-web .
+#   podman run --rm -p 8080:8080 --read-only --tmpfs /tmp topowall-web
+#   open http://localhost:8080/topowall/
+
+FROM docker.io/library/alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS dist
+WORKDIR /src
+COPY LICENSE ./
+COPY scripts/web-dist.sh scripts/
+COPY web/app web/app
+COPY web/src web/src
+COPY crates/kit/palettes/palettes.json crates/kit/palettes/LICENSE-tinted-theming crates/kit/palettes/
+RUN sh scripts/web-dist.sh /dist && chmod -R a+rX,go-w /dist
+
+FROM docker.io/nginxinc/nginx-unprivileged:1.30.4-alpine@sha256:adf5042a17f4ecdd200c595fa9ffd1be37efb18f89a830bd1a00e4ab4d59d42c
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
+COPY --from=dist /dist /usr/share/nginx/html/topowall
+USER 101
+EXPOSE 8080

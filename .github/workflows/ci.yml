@@ -43,12 +43,18 @@ jobs:
         shell: bash
         run: |
           cargo run --release -p topowall -- gpus
-          cargo run --release -p topowall -- render web/studio/assets/yosemite.topo --palette rose-pine --size 640x400 -o smoke.png
+          cargo run --release -p topowall -- render web/test/assets/yosemite.topo --palette rose-pine --size 640x400 -o smoke.png
           test -s smoke.png
           cargo run --release -p topowall -- palettes --filter dark,cool --color always
           cargo run --release -p topowall -- preview rose-pine --size 40x20 > preview.txt
           test -s preview.txt
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Web app data matches the command-line app
+        if: runner.os == 'Linux'
+        run: |
+          cargo build --release -p topowall
+          scripts/web-presets.sh
+          git diff --exit-code -- web/
 
   web:
     runs-on: ubuntu-latest
@@ -58,6 +64,27 @@ jobs:
         with:
           node-version: 22
       - run: node --test web/test/*.test.js
+      - name: The app's copy of the palette catalog is current
+        run: cmp crates/kit/palettes/palettes.json web/app/data/palettes.json
+      - name: Assemble the web app
+        run: scripts/web-dist.sh dist/topowall
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the web app image
+        run: docker build -f deploy/Containerfile -t topowall-web .
+      - name: Serve it read-only as a non-root user and check the responses
+        run: |
+          docker run -d --name web --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges -p 8080:8080 topowall-web
+          for _ in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/topowall/)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/topowall/src/terrain.js)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/topowall/)" = 405
+          curl -sI http://127.0.0.1:8080/topowall/ | grep -qi "^content-security-policy: default-src 'self'"
+          docker logs web
 
   musl:
     runs-on: ubuntu-latest

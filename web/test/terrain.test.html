@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>running</title>
+<pre id="out"></pre>
+<script type="module">
+  // Builds Yosemite Valley in the browser (tiles → GPU resample → smoothing) and
+  // compares it with web/test/assets/yosemite.topo, made by:
+  //   topowall fetch --center 37.738,-119.575 --width-km 18 --size 1920x1200
+  // The title says PASS or FAIL.
+  import { parseTopo } from "../src/topo.js";
+  import { plan, loadMosaic, TileCache, TerrainBuilder, ELEVATION_SOURCES } from "../src/terrain.js";
+  const out = document.getElementById("out");
+  try {
+    const cli = await parseTopo(await (await fetch("assets/yosemite.topo")).arrayBuffer());
+    const p = plan({ lat: 37.738, lon: -119.575, widthKm: 18, widthPx: 1920, heightPx: 1200 });
+    const t0 = performance.now();
+    const mosaic = await loadMosaic(p, ELEVATION_SOURCES[0], new TileCache());
+    const t1 = performance.now();
+    const gl = document.createElement("canvas").getContext("webgl2");
+    const builder = new TerrainBuilder(gl);
+    const hm = builder.build(p, mosaic, 18.75);
+    const data = builder.read(hm);
+    const t2 = performance.now();
+    let worst = 0, sum = 0, at = 0;
+    for (let i = 0; i < data.length; i++) {
+      const d = Math.abs(data[i] - cli.data[i]);
+      sum += d;
+      if (d > worst) { worst = d; at = i; }
+    }
+    // .topo stores 16 bits over the elevation range: ~0.03 m steps here.
+    const step = (cli.max - cli.min) / 65535;
+    const pass = worst < step + 0.05;
+    out.textContent = `zoom ${p.z}, ${p.cols}x${p.rows} tiles, download ${(t1 - t0).toFixed(0)} ms, GPU ${(t2 - t1).toFixed(0)} ms\n` +
+      `max difference ${worst.toFixed(4)} m at (${at % 1920}, ${Math.floor(at / 1920)}), mean ${(sum / data.length).toFixed(4)} m, .topo step ${step.toFixed(4)} m`;
+    document.title = pass ? "PASS" : "FAIL";
+  } catch (e) {
+    out.textContent = String(e.stack || e);
+    document.title = "FAIL";
+  }
+</script>

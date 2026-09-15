@@ -14,6 +14,18 @@ import {
   clamp, hexToRgba, rgbaToHex, rgbToHsv, hsvToRgb, rgbToOklch, formatOklch, parseColor,
 } from "./color.js";
 
+// Styles are attached as constructed style sheets rather than <style> elements,
+// so pages with a strict Content-Security-Policy (no inline styles) can use the picker.
+const sheets = new Map();
+function sheet(css) {
+  if (!sheets.has(css)) {
+    const s = new CSSStyleSheet();
+    s.replaceSync(css);
+    sheets.set(css, s);
+  }
+  return sheets.get(css);
+}
+
 const RECENT_KEY = "topowall.recentColors";
 const RECENT_MAX = 12;
 
@@ -177,14 +189,14 @@ input.invalid { border-color: #e5484d; box-shadow: 0 0 0 3px rgba(229, 72, 77, 0
 }
 .btn.primary { background: var(--tp-accent); border-color: transparent; color: #fff; }
 .btn:focus-visible { outline: 2px solid var(--tp-accent); outline-offset: 1px; }
+.focus-target.ring-focus { width: 1px; height: 1px; opacity: 0; padding: 0; border: 0; }
 `;
 
 const TEMPLATE = `
 <div class="panel" part="panel" role="group" aria-label="Color picker">
   <div class="wheel">
     <div class="ring" part="ring"></div>
-    <button class="focus-target ring-focus" role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360"
-      style="width:1px;height:1px;opacity:0;padding:0;border:0"></button>
+    <button class="focus-target ring-focus" role="slider" aria-label="Hue" aria-valuemin="0" aria-valuemax="360"></button>
     <div class="handle ring-handle"></div>
     <div class="square" part="square" tabindex="0" role="slider" aria-label="Saturation and brightness">
       <div class="handle sv-handle"></div>
@@ -256,7 +268,8 @@ export class TopoColorPicker extends HTMLElement {
   constructor() {
     super();
     const root = this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${STYLE}</style>${TEMPLATE}`;
+    root.adoptedStyleSheets = [sheet(STYLE)];
+    root.innerHTML = TEMPLATE;
     const $ = (sel) => root.querySelector(sel);
     this.#els = {
       wheel: $(".wheel"), ring: $(".ring"), ringFocus: $(".ring-focus"), ringHandle: $(".ring-handle"),
@@ -672,7 +685,8 @@ export class TopoColorInput extends HTMLElement {
   constructor() {
     super();
     const root = this.attachShadow({ mode: "open" });
-    root.innerHTML = `<style>${INPUT_STYLE}</style>
+    root.adoptedStyleSheets = [sheet(INPUT_STYLE)];
+    root.innerHTML = `
       <button class="trigger" type="button" aria-haspopup="dialog" aria-expanded="false">
         <span class="chip"><span class="fill"></span></span><span class="text"></span>
       </button>

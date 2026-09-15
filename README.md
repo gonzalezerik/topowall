@@ -4,7 +4,9 @@ Topographic contour wallpapers from real elevation data, rendered on the GPU.
 
 Pick any place on Earth, pick your screen resolution, and pick your colors:
 a theme, a terminal color scheme, the dominant colors of a photo, or your own
-shader. Use it from the command line or design a theme live in the browser.
+shader. Use it from the command line, or in your browser at
+**[gonzalezerik.com/topowall](https://gonzalezerik.com/topowall)**: search any
+place, pan and zoom a live contour map in your colors, and save a wallpaper.
 
 ![Yosemite Valley in #3f5875 / #87abc0](docs/gallery/yosemite/3f5875-87abc0.jpg)
 
@@ -14,7 +16,7 @@ shader. Use it from the command line or design a theme live in the browser.
 - [CLI guide](#cli-guide)
 - [Colors](#colors)
 - [Line spacing](#line-spacing)
-- [GUI guide](#gui-guide)
+- [Web app guide](#web-app-guide)
 - [The .topo format](#the-topo-format)
 - [Development](#development)
 - [Data and attribution](#data-and-attribution)
@@ -149,17 +151,21 @@ $bin = "$dir\topowall-x86_64-pc-windows-msvc"
 Open a new terminal and run `topowall --version`. If Windows SmartScreen warns
 about the unsigned program, choose **More info → Run anyway**.
 
-### Studio (browser GUI)
+### Web app
 
-Download [`topowall-studio.zip`](https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-studio.zip),
+Nothing to install: open [gonzalezerik.com/topowall](https://gonzalezerik.com/topowall).
+
+To run it yourself, download
+[`topowall-web.zip`](https://github.com/gonzalezerik/topowall/releases/latest/download/topowall-web.zip),
 extract it, and serve the folder with any static file server. With Python:
 
 ```sh
-cd topowall-studio
+cd topowall-web
 python3 -m http.server 8000     # Windows: py -m http.server 8000
 ```
 
-Then open <http://localhost:8000/web/studio/>. See the [GUI guide](#gui-guide).
+Then open <http://localhost:8000/>. To host it on a server, see
+[Hosting the web app](#hosting-the-web-app).
 
 ### Build from source
 
@@ -468,41 +474,78 @@ Steep terrain or small images need wider spacing; otherwise lines merge into
 solid bands. `auto` handles this for you: in the gallery it chose 25 m for
 Yellowstone's plateau and 100 m for the Grand Canyon.
 
-## GUI guide
+## Web app guide
 
-The GUI lives in [`web/`](web). It's plain HTML and JavaScript with no build
-step and no dependencies. Serve the repository with any static file server:
+![topowall web app](docs/app.jpg)
+
+The web app draws contour maps of anywhere on Earth, live, on your own device
+(WebGL2). It builds elevation the same way as `topowall fetch` and uses a port
+of the CLI's shader, so a wallpaper saved in the browser matches what
+`topowall render` makes from the same settings.
+
+- **Move around:** drag to pan; scroll, pinch or double-click to zoom
+  (Shift+double-click zooms out). With the map focused, arrow keys pan and
+  `+`/`-` zoom.
+- **Search:** type coordinates (`37.738, -119.575`, `37°44'17"N 119°34'30"W`)
+  to jump straight there, or a place name and press Enter to ask the search
+  service. Results zoom to fit the place.
+- **Colors:** **Browse** opens all 339 color schemes and the built-in themes,
+  each drawn as a small preview of the area you're looking at. Filter by name
+  or by tag (dark, light, muted, vivid, warm, cool, hue…). For color schemes,
+  pick **Subtle**, **Vivid** or **Mono** lines and the scheme's background or
+  black. **Customize colors** edits the background and each line tier's color,
+  width and opacity.
+- **Lines:** **Auto** picks the spacing for the current zoom, or set it
+  yourself. **Index line every** sets how many lines make a bold one.
+  **Smoothing** softens small bumps in the data (same as `--smooth-m`).
+- **Wallpaper:** choose a size ("This screen" uses your display's native
+  resolution). The outlined area on the map is what the wallpaper covers.
+  **Create wallpaper** renders it at full resolution and lets you download the
+  PNG, the theme as `theme.toml`, and the `topowall fetch` / `topowall render`
+  commands that make the same image.
+- **Open a .topo file:** view and color a heightmap made with `topowall fetch`.
+- **Share a view:** the address bar keeps the place, zoom and colors, so a
+  link opens the same map.
+
+### Data sources and privacy
+
+The app has no server-side code. Everything is drawn in your browser, and
+it contacts only the services shown under **Data sources**:
+
+| What | Default | Can be changed to |
+|---|---|---|
+| Elevation tiles | [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) | any 256 px Web Mercator PNG tiles in Terrarium or Terrain-RGB encoding, from an `https` URL that allows cross-origin requests |
+| Place search | [Nominatim](https://nominatim.org/) (OpenStreetMap) | [Photon](https://photon.komoot.io/), any Nominatim- or Photon-compatible service, or off (coordinates only) |
+
+- No accounts, cookies, analytics or tracking.
+- Elevation tiles are requested without a referrer. Place searches are sent
+  only when you press Enter, at most once a second, with only the site's
+  address as the referrer. Like any website, these services see your IP
+  address.
+- The place and zoom live in the part of the address after `#`, which browsers
+  never send to servers.
+- Settings are kept in your browser's local storage, and **Forget my settings**
+  clears them.
+- The page's Content-Security-Policy lets it run only its own scripts and
+  styles.
+
+### Hosting the web app
+
+`scripts/web-dist.sh OUT_DIR` assembles the app into a folder of static files
+that works under any URL path. [`deploy/Containerfile`](deploy/Containerfile)
+builds a small image that serves it at `/topowall/`:
 
 ```sh
-python3 -m http.server 8000
-# then open http://localhost:8000/web/studio/
+podman build -f deploy/Containerfile -t topowall-web .
+podman run --rm -p 8080:8080 --read-only --tmpfs /tmp --cap-drop ALL topowall-web
+# open http://localhost:8080/topowall/
 ```
 
-(Browsers won't load the page's modules from `file://`, so it needs a server.)
-
-### Studio
-
-![topowall studio](docs/studio.jpg)
-
-The studio renders the contour shader live in your browser (WebGL2). It's a
-port of the CLI's shader, and its output matches `topowall render` to within
-1/255 per channel.
-
-- **Preset:** start from a built-in theme or a palette (subtle or vivid).
-- **Output:** choose the resolution you'll render at. "This screen" uses your
-  display's native size. The preview keeps that aspect ratio and scales line
-  widths to match, so it looks like the final image shrunk to fit.
-  **Actual pixels** shows it 1:1.
-- **Spacing:** drag the slider (1–1000 m, logarithmic), type an exact value, or
-  press **Auto**. The stepper sets how many lines make an index line.
-- **Colors:** background, each tier's color (or each color stop of a ramp),
-  width and opacity.
-- **Open .topo:** open or drag in any heightmap made with `topowall fetch`. A
-  Yosemite sample is loaded at start.
-- **Export:** copy or download the theme as TOML, and copy the matching
-  `topowall fetch` / `topowall render` commands.
-
-Your last theme and output size are remembered in the browser.
+The image runs nginx as a non-root user and needs only a writable `/tmp`
+([`deploy/nginx.conf`](deploy/nginx.conf)). It keeps no access logs, answers
+only `GET` and `HEAD`, serves nothing outside `/topowall/`, and sends a strict
+Content-Security-Policy and related security headers. `/healthz` returns `ok`
+for health checks.
 
 ### Color picker
 
@@ -544,12 +587,6 @@ Attributes: `value`, `alpha` (show opacity), `theme="light|dark"`, and
 follows the system light/dark setting. A demo is in
 [`web/demo/color-picker.html`](web/demo/color-picker.html).
 
-### Coming next
-
-Browse the whole world on a fluid map, frame an area at your output
-resolution (the frame shows how much can be covered at full quality), preview
-your colors live, and export without touching the CLI.
-
 ## The `.topo` format
 
 A `.topo` file is a 16-bit grayscale PNG (row 0 = north) with an iTXt chunk
@@ -571,17 +608,20 @@ open the file as a grayscale height image.
 cargo test --workspace      # Rust tests, including renders on your GPU
 # pick the adapter for the GPU tests, e.g. TOPOWALL_BACKEND=gl or TOPOWALL_GPU=intel
 cargo clippy --workspace -- -D warnings
-node --test web/test/*.test.js   # web color math tests
+node --test web/test/*.test.js   # web tests: color math, scheme colors vs the CLI, coordinates
 
 # Browser tests: serve the repo, then open these pages (the title says PASS/FAIL)
 python3 -m http.server 8000
 #   http://localhost:8000/web/test/picker.test.html
 #   http://localhost:8000/web/test/parity.test.html   (renders for comparison with the CLI)
+#   http://localhost:8000/web/test/terrain.test.html  (browser-built elevation vs `topowall fetch`)
+# The app itself: http://localhost:8000/web/app/
 
 cargo build --release
 scripts/gallery.sh          # regenerate docs/gallery
 cargo run -p topowall-kit --example palette-catalog   # regenerate crates/kit/palettes/palettes.json
-scripts/web-presets.sh      # regenerate web/studio/presets.json
+scripts/web-presets.sh      # regenerate the web app's themes and palette data (and web test fixtures)
+scripts/web-dist.sh dist    # assemble the web app as static files
 ```
 
 Layout:
@@ -591,8 +631,9 @@ crates/kit       shared with streetwall: colors, palettes, GPU selection, safe f
 crates/core      elevation readers, tile fetching, resampling, .topo format
 crates/render    wgpu renderer, WGSL shader, themes, palette → theme, spacing
 crates/cli       the topowall command
-web/src          color math, color picker, .topo reader, WebGL renderer, theme model
-web/studio       the studio app
+web/src          color math, color picker, PNG/.topo readers, terrain building, search, WebGL renderer, themes
+web/app          the web app
+deploy/          container image and nginx config for hosting the web app
 themes/          built-in themes
 ```
 
@@ -605,6 +646,11 @@ and ETOPO1. If you publish images made from this data, follow the
 Resolution varies by region: about 10 m in the United States and roughly
 30–90 m elsewhere. Downloaded tiles are cached in
 `~/.cache/topowall/`.
+
+The web app's place search uses OpenStreetMap data through Nominatim or Photon:
+© [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), available
+under the Open Database License. Follow each service's usage policy if you host
+the app for others.
 
 Built-in color schemes come from
 [tinted-theming/schemes](https://github.com/tinted-theming/schemes) (MIT); see

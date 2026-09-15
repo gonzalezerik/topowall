@@ -1,0 +1,105 @@
+[
+ {
+  "id": "3e5d58-92aca0",
+  "theme": {
+   "name": "#3e5d58 / #92aca0",
+   "background": "#000000",
+   "lines": [
+    {
+     "every": 20,
+     "color": "#3e5d58",
+     "width": 1.25
+    },
+    {
+     "every": 100,
+     "color": "#92aca0",
+     "width": 1.8
+    }
+   ]
+  }
+ },
+ {
+  "id": "3f5875-87abc0",
+  "theme": {
+   "name": "#3f5875 / #87abc0",
+   "background": "#000000",
+   "lines": [
+    {
+     "every": 20,
+     "color": "#3f5875",
+     "width": 1.25
+    },
+    {
+     "every": 100,
+     "color": "#87abc0",
+     "width": 1.8
+    }
+   ]
+  }
+ },
+ {
+  "id": "graphite",
+  "theme": {
+   "name": "Graphite",
+   "background": "#000000",
+   "lines": [
+    {
+     "every": 20,
+     "color": "#5c5c5c",
+     "width": 1.25
+    },
+    {
+     "every": 100,
+     "color": "#949494",
+     "width": 1.8
+    }
+   ]
+  }
+ },
+ {
+  "id": "hypsometric",
+  "theme": {
+   "name": "Hypsometric",
+   "background": "#0b0d10",
+   "lines": [
+    {
+     "every": 20,
+     "width": 1.25,
+     "opacity": 0.55,
+     "color": [
+      {
+       "at": "0%",
+       "color": "oklch(0.45 0.06 190)"
+      },
+      {
+       "at": "50%",
+       "color": "oklch(0.55 0.05 140)"
+      },
+      {
+       "at": "100%",
+       "color": "oklch(0.70 0.06 80)"
+      }
+     ]
+    },
+    {
+     "every": 100,
+     "width": 1.8,
+     "color": [
+      {
+       "at": "0%",
+       "color": "oklch(0.65 0.08 190)"
+      },
+      {
+       "at": "50%",
+       "color": "oklch(0.75 0.07 140)"
+      },
+      {
+       "at": "100%",
+       "color": "oklch(0.88 0.07 80)"
+      }
+     ]
+    }
+   ]
+  }
+ }
+]

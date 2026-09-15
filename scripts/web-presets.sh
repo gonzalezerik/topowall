@@ -1,36 +1,34 @@
 #!/usr/bin/env bash
-# Regenerate web/studio/presets.json from the CLI's built-in themes and palettes,
-# so the studio's presets are exactly what `topowall render` produces.
+# Regenerate the browser app's data from the command-line app, so the web and
+# `topowall render` agree:
+#   web/app/data/themes.json            built-in themes (themes/*.toml)
+#   web/app/data/palettes.json          copy of crates/kit/palettes/palettes.json
+#   web/test/fixtures/palette-themes.json  `topowall theme` output for every scheme (web tests)
 #
 #   cargo build --release && scripts/web-presets.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TOPOWALL=${TOPOWALL:-target/release/topowall}
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+mkdir -p web/app/data web/test/fixtures
 
-THEMES=(graphite 3e5d58-92aca0 3f5875-87abc0 hypsometric)
-PALETTES=(solarized-dark rose-pine catppuccin-mocha nord gruvbox-dark dracula tokyo-night-dark everforest-dark-medium kanagawa)
+cp crates/kit/palettes/palettes.json web/app/data/palettes.json
 
-for t in "${THEMES[@]}"; do
-  cp "themes/$t.toml" "$TMP/theme--$t.toml"
-done
-for p in "${PALETTES[@]}"; do
-  for style in subtle vivid; do
-    "$TOPOWALL" theme --palette "$p" --style "$style" -o "$TMP/palette--$p--$style.toml"
-  done
-done
+python3 - "$TOPOWALL" <<'PY'
+import json, pathlib, subprocess, sys, tomllib
+topowall = sys.argv[1]
 
-python3 - "$TMP" > web/studio/presets.json <<'PY'
-import json, pathlib, sys, tomllib
-out = []
-for f in sorted(pathlib.Path(sys.argv[1]).glob("*.toml")):
-    kind, *rest = f.stem.split("--")
-    theme = tomllib.loads(f.read_text())
-    out.append({"id": f.stem, "group": "Themes" if kind == "theme" else "Palettes",
-                "label": theme.get("name", rest[0]), "theme": theme})
-order = {"Themes": 0, "Palettes": 1}
-out.sort(key=lambda p: (order[p["group"]], p["id"]))
-json.dump(out, sys.stdout, indent=1, ensure_ascii=False)
+order = ["3e5d58-92aca0", "3f5875-87abc0", "graphite", "hypsometric"]
+themes = sorted(pathlib.Path("themes").glob("*.toml"), key=lambda f: (order.index(f.stem) if f.stem in order else 99, f.stem))
+out = [{"id": f.stem, "theme": tomllib.loads(f.read_text())} for f in themes]
+pathlib.Path("web/app/data/themes.json").write_text(json.dumps(out, indent=1, ensure_ascii=False) + "\n")
+
+catalog = json.loads(pathlib.Path("crates/kit/palettes/palettes.json").read_text())["palettes"]
+fixture = {}
+for p in catalog:
+    for style, bg in [("subtle", "palette"), ("vivid", "palette"), ("mono", "palette"), ("subtle", "black")]:
+        t = tomllib.loads(subprocess.run([topowall, "theme", "--palette", p["name"], "--style", style, "--background", bg],
+                                         capture_output=True, text=True, check=True).stdout)
+        fixture[f"{p['name']}|{style}|{bg}"] = [t["background"], t["lines"][0]["color"], t["lines"][1]["color"]]
+pathlib.Path("web/test/fixtures/palette-themes.json").write_text(json.dumps(fixture, separators=(",", ":")) + "\n")
+print(f"wrote {len(out)} themes and {len(fixture)} palette fixtures", file=sys.stderr)
 PY
-echo "wrote web/studio/presets.json ($(grep -c '"id"' web/studio/presets.json) presets)" >&2

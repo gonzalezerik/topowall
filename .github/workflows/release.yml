@@ -98,7 +98,7 @@ jobs:
         run: |
           bin="target/${TARGET}/release/topowall.exe"
           "$bin" gpus
-          "$bin" render web/studio/assets/yosemite.topo --palette rose-pine --size 320x200 -o smoke.png
+          "$bin" render web/test/assets/yosemite.topo --palette rose-pine --size 320x200 -o smoke.png
           test -s smoke.png
       - name: Package
         shell: bash
@@ -136,7 +136,7 @@ jobs:
             . /root/.cargo/env
             RUSTFLAGS="-C target-feature=-crt-static" cargo build --release --locked -p topowall
             file target/release/topowall | grep -q "interpreter /lib/ld-musl"
-            XDG_RUNTIME_DIR=/tmp ./target/release/topowall render web/studio/assets/yosemite.topo \
+            XDG_RUNTIME_DIR=/tmp ./target/release/topowall render web/test/assets/yosemite.topo \
               --palette rose-pine --size 320x200 -o /tmp/smoke.png
             test -s /tmp/smoke.png
             chown -R "$HOST_UID:$HOST_GID" target
@@ -154,38 +154,36 @@ jobs:
           name: ${{ matrix.target }}
           path: dist/*
 
-  studio:
+  web:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Package the studio (code only, no sample map or images)
+      - name: Package the web app (static files only)
         run: |
-          name="topowall-studio"
-          mkdir -p "dist/$name/web/studio"
-          cp -r web/src "dist/$name/web/"
-          cp web/studio/index.html web/studio/studio.js web/studio/studio.css web/studio/presets.json "dist/$name/web/studio/"
-          cp LICENSE "dist/$name/"
+          name="topowall-web"
+          scripts/web-dist.sh "dist/$name"
           cat > "dist/$name/README.txt" <<'TXT'
-          topowall studio
+          topowall web app
 
-          Serve this folder with any static file server, then open /web/studio/:
+          Serve this folder with any static file server, then open it in a browser:
 
             python3 -m http.server 8000
-            http://localhost:8000/web/studio/
+            http://localhost:8000/
 
-          Open or drop a .topo heightmap made with `topowall fetch`.
+          It downloads elevation tiles and sends place searches from your browser to
+          the services shown under "Data sources" in the app. You can change them there.
           TXT
           sed -i 's/^          //' "dist/$name/README.txt"
           cd dist && zip -qr "$name.zip" "$name" && rm -rf "$name"
       - uses: actions/upload-artifact@v4
         with:
-          name: studio
+          name: web
           path: dist/*
 
   release:
     if: github.event_name == 'push'
-    needs: [build, build-windows-arm64, build-musl, studio]
+    needs: [build, build-windows-arm64, build-musl, web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -211,7 +209,7 @@ jobs:
           | macOS Intel | `topowall-x86_64-apple-darwin.tar.gz` |
           | Windows x86_64 | `topowall-x86_64-pc-windows-msvc.zip` |
           | Windows ARM64 | `topowall-aarch64-pc-windows-msvc.zip` |
-          | Studio (browser GUI) | `topowall-studio.zip` |
+          | Web app (runs in your browser) | `topowall-web.zip` |
 
           Each CLI archive contains only the `topowall` binary and licenses. It runs on
           dedicated and integrated GPUs (Intel, AMD, NVIDIA, Apple) through Vulkan, Metal,

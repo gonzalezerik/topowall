@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' https:; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>topowall</title>
+  <meta name="description" content="Topographic contour wallpapers of anywhere on Earth, rendered live in your browser.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="map" id="map" tabindex="0" aria-label="Contour map. Drag to move, scroll or pinch to zoom, arrow keys to pan, plus and minus to zoom.">
+    <canvas id="canvas"></canvas>
+    <div class="frame" id="frame" hidden><span class="frame-label" id="frame-label"></span></div>
+  </div>
+  <div class="progress" id="progress" hidden><span id="progress-bar"></span></div>
+  <div class="map-error" id="map-error" hidden></div>
+
+  <header class="floating searchbar card">
+    <div class="search-row">
+      <a class="brand" href="https://github.com/gonzalezerik/topowall" title="topowall on GitHub"><span class="logo" aria-hidden="true"></span>topowall</a>
+      <form id="search-form" role="search" autocomplete="off">
+        <input id="search" type="search" placeholder="Search a place or coordinates" spellcheck="false"
+          aria-label="Search a place or coordinates" aria-controls="results" aria-expanded="false">
+      </form>
+      <button class="icon-btn" id="search-go" type="button" aria-label="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      </button>
+    </div>
+    <ul class="results" id="results" role="listbox" aria-label="Search results" hidden></ul>
+  </header>
+
+  <div class="floating banner card" id="file-banner" hidden>
+    <span id="file-name"></span>
+    <button class="btn small" id="file-close" type="button">Back to the map</button>
+  </div>
+
+  <div class="floating zoom card" id="zoom">
+    <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+    <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+  </div>
+
+  <div class="floating readout card" id="readout" aria-live="off">
+    <div class="scale"><span id="scale-label"></span><div class="scale-bar" id="scale-bar"></div></div>
+    <span id="cursor"></span>
+  </div>
+
+  <aside class="floating panel card" id="panel" aria-label="Map settings">
+    <button class="panel-toggle" id="panel-toggle" type="button" aria-expanded="true">
+      <span>Colors &amp; wallpaper</span><span aria-hidden="true">▾</span>
+    </button>
+    <div class="panel-scroll">
+      <section class="group">
+        <h2>Colors</h2>
+        <button class="scheme-button" id="scheme-button" type="button" aria-haspopup="dialog">
+          <span class="row spread"><span class="name" id="scheme-name"></span><span class="dim">Browse</span></span>
+          <span class="strip" id="scheme-strip" aria-hidden="true"></span>
+        </button>
+        <div class="field" id="palette-options">
+          <div class="segmented" role="radiogroup" aria-label="Line style" id="style">
+            <button type="button" role="radio" data-value="subtle" title="Soft lines from the scheme's accent">Subtle</button>
+            <button type="button" role="radio" data-value="vivid" title="The accent color as-is">Vivid</button>
+            <button type="button" role="radio" data-value="mono" title="Foreground color only">Mono</button>
+          </div>
+          <div class="field-head">
+            <span class="dim">Background</span>
+            <div class="segmented" role="radiogroup" aria-label="Background" id="background-mode">
+              <button type="button" role="radio" data-value="palette" title="The scheme's own background color">Scheme</button>
+              <button type="button" role="radio" data-value="black">Black</button>
+            </div>
+          </div>
+        </div>
+        <details class="more" id="customize">
+          <summary>Customize colors</summary>
+          <div class="field">
+            <div class="field-head"><span>Background</span><topo-color-input id="background"></topo-color-input></div>
+            <div id="tiers" class="field"></div>
+            <button class="btn small" id="reset-colors" type="button" hidden>Undo customizations</button>
+          </div>
+        </details>
+      </section>
+
+      <section class="group">
+        <h2>Lines</h2>
+        <div class="field">
+          <div class="field-head">
+            <label for="interval">Line every</label>
+            <span class="value-edit"><input type="number" id="interval-num" min="0.5" max="1000" step="any" aria-label="Metres between lines"> m</span>
+          </div>
+          <div class="row">
+            <input type="range" id="interval" min="0" max="1000" step="1" aria-label="Metres between lines (log scale)">
+            <button class="btn small" id="auto" type="button" aria-pressed="true" title="Pick spacing from the terrain and zoom">Auto</button>
+          </div>
+        </div>
+        <div class="field-head">
+          <label for="index-every">Index line every</label>
+          <span class="stepper">
+            <button type="button" class="btn small" id="index-dec" aria-label="Fewer lines per index line">−</button>
+            <input type="number" id="index-every" min="1" max="50" aria-label="Lines per index line">
+            <button type="button" class="btn small" id="index-inc" aria-label="More lines per index line">+</button>
+          </span>
+        </div>
+        <label class="slider-row" title="Smooths small bumps in the elevation data so lines flow">
+          <span>Smoothing</span><input type="range" id="smooth" min="0" max="200" step="0.25"><output id="smooth-out"></output>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Wallpaper</h2>
+        <select id="output-size" aria-label="Wallpaper size">
+          <option value="screen">This screen</option>
+          <option value="1920x1080">1920 × 1080</option>
+          <option value="2560x1440">2560 × 1440</option>
+          <option value="2880x1800">2880 × 1800</option>
+          <option value="3840x2160">3840 × 2160 (4K)</option>
+          <option value="5120x2160">5120 × 2160</option>
+          <option value="1206x2622">1206 × 2622 (phone)</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <div class="row" id="custom-size" hidden>
+          <input type="number" id="out-w" min="16" max="16384" value="2880" aria-label="Width in pixels"> ×
+          <input type="number" id="out-h" min="16" max="16384" value="1800" aria-label="Height in pixels">
+        </div>
+        <label class="check"><input type="checkbox" id="show-frame" checked> Show the wallpaper's area</label>
+        <button class="btn primary wide" id="create" type="button">Create wallpaper</button>
+        <label class="btn wide" title="Open a .topo heightmap made with topowall fetch">
+          Open a .topo file<input type="file" id="file" accept=".topo,image/png" hidden>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Data sources</h2>
+        <div class="sources" id="source-summary"></div>
+        <details class="more" id="sources-details">
+          <summary>Change sources</summary>
+          <div class="field">
+            <label for="elevation-source">Elevation</label>
+            <select id="elevation-source"></select>
+            <div class="custom-source" id="elevation-custom" hidden>
+              <input type="url" id="elevation-url" placeholder="https://example.com/tiles/{z}/{x}/{y}.png" aria-label="Elevation tile URL">
+              <div class="row">
+                <select id="elevation-encoding" aria-label="Tile encoding"></select>
+                <input type="number" id="elevation-maxzoom" min="0" max="20" value="15" aria-label="Highest zoom level" title="Highest zoom level">
+              </div>
+              <div class="hint">256 px PNG tiles in Web Mercator. The server must allow cross-origin requests.</div>
+              <button class="btn small" id="elevation-apply" type="button">Use this source</button>
+              <div class="hint error" id="elevation-error" hidden></div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="search-source">Place search</label>
+            <select id="search-source"></select>
+            <div class="custom-source" id="search-custom" hidden>
+              <input type="url" id="search-url" placeholder="https://nominatim.example.com" aria-label="Search service URL">
+              <select id="search-kind" aria-label="Search service type">
+                <option value="nominatim">Nominatim-compatible</option>
+                <option value="photon">Photon-compatible</option>
+              </select>
+              <button class="btn small" id="search-apply" type="button">Use this service</button>
+              <div class="hint error" id="search-error" hidden></div>
+            </div>
+          </div>
+        </details>
+        <details class="more">
+          <summary>Privacy</summary>
+          <ul class="privacy">
+            <li>No accounts, cookies, analytics or tracking. This site has no server-side code; it only sends these files.</li>
+            <li>Maps are drawn on your own device. Your browser downloads elevation tiles directly from the elevation source above, and sends place searches to the search service when you press Enter. Those services see your IP address, as any website does.</li>
+            <li>The place you're looking at is kept in the address after <span class="mono">#</span>, which browsers never send to servers.</li>
+            <li>Your settings are saved in this browser only.</li>
+          </ul>
+          <button class="btn small" id="forget" type="button">Forget my settings</button>
+        </details>
+      </section>
+    </div>
+  </aside>
+
+  <footer class="floating attribution" id="attribution"></footer>
+
+  <dialog id="schemes" aria-labelledby="schemes-title">
+    <div class="dialog-head">
+      <h3 id="schemes-title">Colors</h3>
+      <div class="tabs" role="tablist">
+        <button class="btn small" role="tab" id="tab-palettes" type="button" aria-pressed="true">Color schemes</button>
+        <button class="btn small" role="tab" id="tab-themes" type="button" aria-pressed="false">Themes</button>
+      </div>
+      <button class="icon-btn" id="schemes-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="scheme-controls" id="scheme-controls">
+      <div class="row">
+        <input type="text" id="scheme-search" placeholder="Filter by name" autocomplete="off" spellcheck="false" aria-label="Filter by name">
+        <span class="dim" id="scheme-count"></span>
+      </div>
+      <div class="tag-groups" id="tag-groups"></div>
+    </div>
+    <div class="scheme-grid" id="scheme-grid"></div>
+  </dialog>
+
+  <dialog id="export" aria-labelledby="export-title">
+    <div class="dialog-head">
+      <h3 id="export-title">Wallpaper</h3>
+      <button class="icon-btn" id="export-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="export-body">
+      <div class="export-preview" id="export-preview"><div class="export-status" id="export-status"></div></div>
+      <div class="row">
+        <a class="btn primary" id="download-png" download>Download PNG</a>
+        <button class="btn" id="download-theme" type="button">Download theme.toml</button>
+        <span class="dim" id="export-info"></span>
+      </div>
+      <div class="field">
+        <div class="field-head"><span class="dim">Make the same wallpaper with the command-line app</span>
+          <button class="btn small" id="copy-cli" type="button">Copy</button></div>
+        <pre class="code" id="export-cli"></pre>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="drop-hint" id="drop-hint" hidden>Drop a .topo file</div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

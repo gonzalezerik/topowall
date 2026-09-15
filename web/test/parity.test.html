@@ -19,7 +19,7 @@
     ],
   };
   try {
-    const hm = await parseTopo(await (await fetch("../studio/assets/yosemite.topo")).arrayBuffer());
+    const hm = await parseTopo(await (await fetch("assets/yosemite.topo")).arrayBuffer());
     const r = new ContourRenderer(document.getElementById("c"));
     r.setHeightmap(hm);
     r.setTheme(resolveTheme(theme, hm.min, hm.max));
