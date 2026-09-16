@@ -641,6 +641,23 @@ function closeContours() {
   $("contours-btn").setAttribute("aria-expanded", "false");
 }
 
+/** On narrow screens the attribution/sources footer moves inside the
+ *  settings drawer instead of sitting as its own fixed bar — there isn't
+ *  room for a persistent footer and the sheet already scrolls. */
+function layoutFooter() {
+  const footer = $("bottom-bar"), slot = $("footer-slot"), heading = $("h-sources");
+  const narrow = window.innerWidth <= 760;
+  if (narrow && footer.parentElement !== slot) {
+    slot.appendChild(footer);
+    footer.classList.add("docked");
+    heading.classList.remove("sr-only");
+  } else if (!narrow && footer.parentElement !== document.body) {
+    document.body.appendChild(footer);
+    footer.classList.remove("docked");
+    heading.classList.add("sr-only");
+  }
+}
+
 /** Elements that fade out with the UI. #topbar itself is excluded so the
  *  hide-UI button inside it stays reachable to bring everything back. */
 const HIDEABLE_IDS = ["status-strip", "panel", "zoom", "pad", "readout", "bottom-bar"];
@@ -1738,13 +1755,25 @@ function wirePanel() {
   };
   smooth.value = state.smoothM;
   smoothOut();
+  let smoothRebuildTimer = 0;
   smooth.addEventListener("input", () => {
     state.smoothM = +smooth.value;
     smoothOut();
+    // Smoothing is baked into the heightmap (not a cheap shader redraw), so
+    // rebuilding on every tick while dragging would hammer the network;
+    // debounce it instead of waiting for the drag to end entirely. This
+    // doesn't go through scheduleRebuild/needsRebuild — those only look at
+    // view and canvas size, neither of which changed here.
+    if (file) return;
+    clearTimeout(smoothRebuildTimer);
+    smoothRebuildTimer = setTimeout(rebuild, 150);
   });
   smooth.addEventListener("change", () => {
     store.save();
-    if (!file) rebuild();
+    if (!file) {
+      clearTimeout(smoothRebuildTimer);
+      rebuild();
+    }
   });
 
   const size = $("output-size");
@@ -1995,7 +2024,12 @@ async function init() {
   wireFrameHandle();
   wireTopbar();
   layoutTopbar();
-  window.addEventListener("resize", debounce(layoutTopbar, 150));
+  layoutFooter();
+  window.addEventListener("resize", debounce(() => {
+    layoutTopbar();
+    layoutFooter();
+    updateFrame();
+  }, 150));
   window.addEventListener("hashchange", () => {
     const h = readHash();
     if (h.view && Math.abs(h.view.lat - state.view.lat) + Math.abs(h.view.lon - state.view.lon) > 1e-4) {

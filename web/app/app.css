@@ -354,21 +354,36 @@ body:not(.ui-hidden) .topbar > * {
    only search + create (everything else moves into the contours popover,
    via JS — see layoutTopbar in app.js) ──────────────────────────────── */
 @media (max-width: 760px) {
-  .panel { left: 8px; right: 8px; top: auto; bottom: 40px; width: auto; max-height: 82vh; }
+  .panel { left: 8px; right: 8px; top: auto; bottom: 14px; width: auto; max-height: 82vh; }
   .topbar { left: 8px; right: 8px; padding: 0 4px 0 8px; gap: 5px; }
   .wordmark { display: none; }
   .search-wrap { flex: 1 1 auto; max-width: none; }
   .status-strip { display: none; }
-  .zoomstack { top: 70px; bottom: auto; right: 12px; }
-  .pad-mini { top: 70px; bottom: auto; right: 58px; }
+  .zoomstack { top: 82px; bottom: auto; right: 12px; }
+  .pad-mini { top: 82px; bottom: auto; right: 58px; }
   .scalebar { display: none; }
+
+  /* The attribution/sources footer moves into the drawer (see layoutFooter
+     in app.js) instead of sitting as its own fixed bar: there's no room for
+     a persistent footer on a phone, and it belongs with the other settings
+     anyway. #h-sources loses its sr-only treatment here so it reads as a
+     normal section heading, matching WALLPAPER/COLORS above it. */
+  #bottom-bar.docked {
+    position: static; z-index: auto; background: transparent; display: block;
+    padding: 14px 16px 4px; margin-top: 4px; border-top: 1px solid var(--border); font-size: 12px;
+  }
+  #bottom-bar.docked .attribution { flex-wrap: wrap; padding-bottom: 10px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+  #bottom-bar.docked .sources-inline { display: block; }
+  #bottom-bar.docked #h-sources { margin-bottom: 8px; }
+  #bottom-bar.docked .sources-inline .more { position: static; margin-bottom: 6px; }
+  #bottom-bar.docked .sources-inline .more > summary { text-decoration: none; }
+  #bottom-bar.docked .sources-inline .more .popover-body {
+    position: static; width: auto; max-width: none; box-shadow: none; border: 0; background: transparent; padding: 8px 0 4px; margin: 0;
+  }
 }
 
 @media (max-width: 400px) {
   .hide-compact { display: none; }
-  .bottom-bar { font-size: 10.5px; padding: 5px 10px; flex-wrap: nowrap; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .attribution { flex-wrap: nowrap; flex-shrink: 0; }
-  .sources-inline .more .popover-body { bottom: calc(100% + 6px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
