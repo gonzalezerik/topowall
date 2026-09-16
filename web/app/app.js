@@ -475,30 +475,38 @@ function frameRect() {
   const W = canvas.width, H = canvas.height;
   const { w, h } = outputSize();
   const panel = $("panel").getBoundingClientRect();
-  const zoomEl = $("zoom").getBoundingClientRect();
+  const padEl = $("pad").getBoundingClientRect();
   const dpr = W / canvas.clientWidth;
-  // Keep clear of the panel and the zoom stack using their *actual* current
-  // position, not a guessed flat margin: on wide screens the panel sits
-  // right-of-map (and can be any height), so exclude from its left edge; on
-  // narrow screens it's a bottom sheet that can be collapsed or expanded to
-  // most of the screen, so exclude from its top edge instead, and also clear
-  // the zoom stack's own corner (top-right on narrow, bottom-right on wide,
-  // where it already sits inside the panel's excluded band).
+  // Keep clear of the panel and the pan/zoom cluster using their *actual*
+  // current position, not a guessed flat margin: on wide screens the panel
+  // sits right-of-map (and can be any height), so exclude from its left
+  // edge; on narrow screens it's a bottom sheet that can be collapsed or
+  // expanded to most of the screen, so exclude from its top edge instead,
+  // and also clear the pan pad's corner (it sits left of the zoom stack, so
+  // it's the leftmost of the two — top-right on narrow, bottom-right on
+  // wide, where it already sits inside the panel's excluded band).
   const wide = window.innerWidth > 760;
+  // The pad (and zoom) are hidden while viewing a .topo file, which zeroes
+  // their rect — fall back to a flat margin rather than exclude everything.
   const rightInset = wide
     ? (window.innerWidth - panel.left + 14) * dpr
-    : (window.innerWidth - zoomEl.left + 10) * dpr;
+    : (padEl.width ? (window.innerWidth - padEl.left + 10) : 24) * dpr;
   const leftInset = 24 * dpr;
   const top = (wide ? 100 : 70) * dpr;
   const bottom = wide ? 140 * dpr : (window.innerHeight - panel.top + 10) * dpr;
-  const availW = Math.max(50, W - rightInset - leftInset - 24 * dpr), availH = Math.max(50, H - top - bottom);
+  // If the panel (a bottom sheet, expanded) has swallowed almost the whole
+  // screen, there's no honest place left to draw the frame without it
+  // overlapping the panel; say so instead of forcing a degenerate box in.
+  const rawAvailH = H - top - bottom, rawAvailW = W - rightInset - leftInset - 24 * dpr;
+  const tooCramped = rawAvailH < 80 * dpr || rawAvailW < 80 * dpr;
+  const availW = Math.max(50, rawAvailW), availH = Math.max(50, rawAvailH);
   const s = Math.min(availW / w, availH / h);
   const fw = w * s, fh = h * s;
   const maxDx = Math.max(0, (availW - fw) / 2), maxDy = Math.max(0, (availH - fh) / 2);
   frameOffset.dx = Math.max(-maxDx, Math.min(maxDx, frameOffset.dx));
   frameOffset.dy = Math.max(-maxDy, Math.min(maxDy, frameOffset.dy));
   const x = leftInset + (availW - fw) / 2 + frameOffset.dx, y = top + (availH - fh) / 2 + frameOffset.dy;
-  return { x, y, w: fw, h: fh, outW: w, outH: h };
+  return { x, y, w: fw, h: fh, outW: w, outH: h, tooCramped };
 }
 
 function frameCenter(r) {
@@ -518,6 +526,15 @@ function updateFrame() {
     return;
   }
   const r = frameRect();
+  if (r.tooCramped) {
+    // The expanded settings sheet has taken over the screen; showing the
+    // frame here would mean drawing it right on top of that panel. It comes
+    // back the moment there's room again (collapsing the sheet, rotating,
+    // resizing).
+    frame.hidden = true;
+    $("status-strip").textContent = "";
+    return;
+  }
   const dpr = canvas.width / canvas.clientWidth;
   Object.assign(frame.style, { left: `${r.x / dpr}px`, top: `${r.y / dpr}px`, width: `${r.w / dpr}px`, height: `${r.h / dpr}px` });
   frame.hidden = false;
@@ -626,7 +643,7 @@ function closeContours() {
 
 /** Elements that fade out with the UI. #topbar itself is excluded so the
  *  hide-UI button inside it stays reachable to bring everything back. */
-const HIDEABLE_IDS = ["status-strip", "panel", "zoom", "readout", "bottom-bar"];
+const HIDEABLE_IDS = ["status-strip", "panel", "zoom", "pad", "readout", "bottom-bar"];
 function setUIHidden(hidden) {
   document.body.classList.toggle("ui-hidden", hidden);
   $("hide-ui-btn").setAttribute("aria-pressed", String(hidden));
@@ -1398,6 +1415,7 @@ async function openFile(f) {
     $("file-name").textContent = `${f.name} · ${hm.width}×${hm.height} · ${Math.round(hm.min)}–${Math.round(hm.max)} m`;
     $("file-banner").hidden = false;
     $("zoom").hidden = true;
+    $("pad").hidden = true;
     $("map").classList.add("file");
     thumbs.invalidate();
     draw();
@@ -1410,6 +1428,7 @@ function closeFile() {
   file = null;
   $("file-banner").hidden = true;
   $("zoom").hidden = false;
+  $("pad").hidden = false;
   if (built) renderer.setHeightTexture(built.hm);
   lastResolvedKey = "";
   thumbs.invalidate();
@@ -1504,6 +1523,15 @@ function wireMap() {
     setView(DEFAULT_VIEW.lat, DEFAULT_VIEW.lon, (DEFAULT_VIEW.km * 1000) / canvas.width);
     announceView();
   });
+  // Buttons that move the map, so it can be panned without dragging.
+  for (const b of document.querySelectorAll("[data-pan]")) {
+    b.addEventListener("click", () => {
+      const [x, y] = b.dataset.pan.split(",").map(Number);
+      const step = Math.min(canvas.width, canvas.height) * 0.25;
+      panBy(-x * step, -y * step);
+      announceView();
+    });
+  }
   new ResizeObserver(() => {
     if (sizeCanvas()) scheduleRebuild(120);
     draw();

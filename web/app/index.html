@@ -119,6 +119,17 @@
       <span class="sr-only" id="cursor-copy-desc">Copies these coordinates.</span>
     </div>
 
+    <div class="floating pad-mini card" id="pad" role="group" aria-label="Pan the map">
+      <button type="button" class="pad-up" data-pan="0,-1" aria-label="Move map north">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 15 6-6 6 6"/></svg></button>
+      <button type="button" class="pad-left" data-pan="-1,0" aria-label="Move map west">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m15 6-6 6 6 6"/></svg></button>
+      <button type="button" class="pad-right" data-pan="1,0" aria-label="Move map east">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6"/></svg></button>
+      <button type="button" class="pad-down" data-pan="0,1" aria-label="Move map south">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg></button>
+    </div>
+
     <div class="floating zoomstack card" id="zoom" role="group" aria-label="Zoom">
       <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
       <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
@@ -179,7 +190,10 @@
             </div>
             <div class="swatches" id="swatches" role="group" aria-labelledby="swatch-label"></div>
             <div class="row spread" id="swatch-edit-row">
-              <topo-color-input id="swatch-add" label="Color to add"></topo-color-input>
+              <span class="add-color-field">
+                <span class="dim">New color to add</span>
+                <topo-color-input id="swatch-add" label="Color to add"></topo-color-input>
+              </span>
               <span class="row">
                 <button class="btn small" id="swatch-add-btn" type="button" aria-describedby="swatch-add-desc">+ Add color</button>
                 <button class="btn small" id="swatch-edit" type="button" aria-pressed="false">Remove colors</button>

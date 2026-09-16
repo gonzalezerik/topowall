@@ -121,6 +121,20 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 .zoomstack button:hover { background: var(--surface-2); }
 .zoomstack button:focus-visible { outline-offset: -3px; }
 .zoomstack svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* A small pan pad next to the zoom stack — same compact card look, just a
+   plus-shaped cross of 4 buttons (no diagonals, no empty filler corners). */
+.pad-mini { right: 394px; bottom: 46px; width: 84px; height: 83px; display: grid;
+  grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); overflow: hidden; }
+.pad-mini button { border: 0; background: transparent; cursor: pointer; color: var(--text); display: grid; place-items: center; }
+.pad-mini button:hover { background: var(--surface-2); }
+.pad-mini button:focus-visible { outline-offset: -3px; }
+.pad-mini svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.pad-up { grid-column: 2; grid-row: 1; border-bottom: 1px solid var(--border); }
+.pad-left { grid-column: 1; grid-row: 2; border-right: 1px solid var(--border); }
+.pad-right { grid-column: 3; grid-row: 2; border-left: 1px solid var(--border); }
+.pad-down { grid-column: 2; grid-row: 3; border-top: 1px solid var(--border); }
+
 .scalebar { position: fixed; left: 14px; bottom: 46px; z-index: 10; display: flex; align-items: center; gap: 10px; height: 24px; padding: 0 10px;
   background: rgba(12, 14, 17, .55); border-radius: 999px; font: 11px var(--mono); color: var(--text); }
 .scale { display: flex; align-items: center; gap: 6px; }
@@ -216,8 +230,13 @@ input[type="range"] { accent-color: var(--accent); width: 100%; margin: 0; }
   color: #fff; background: rgba(0, 0, 0, .45); border-radius: 5px; }
 .swatches .empty-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
 #mine-name { flex: 1; margin-left: 8px; }
-#swatch-edit-row { flex-wrap: wrap; row-gap: 8px; }
+/* A dashed divider (not just a gap) and a visible caption mark this off from
+   the swatches grid above it: it's the "pick a new color" control, not one
+   more already-in-the-scheme swatch. */
+#swatch-edit-row { flex-wrap: wrap; row-gap: 10px; margin-top: 2px; padding-top: 12px; border-top: 1px dashed var(--border); }
 #swatch-edit-row > span.row { flex-wrap: wrap; }
+.add-color-field { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.add-color-field > .dim { font-size: 10.5px; }
 .scheme-card .delete { float: right; }
 .colors-detail { border-top: 1px solid var(--border); padding-top: 10px; }
 .sub-heading { margin: 0; font-size: 12px; font-weight: 650; color: var(--text); }
@@ -307,14 +326,20 @@ kbd { font: 11.5px var(--mono); background: var(--surface); border: 1px solid rg
 
 /* Hide-UI mode (H key or the eye button): fade all panel chrome for an
    unobstructed preview. Map, wallpaper frame and its handle stay put and
-   interactive so panning/zooming and dragging the frame still work. */
-body.ui-hidden .topbar, body.ui-hidden .status-strip, body.ui-hidden .panel,
-body.ui-hidden .zoomstack, body.ui-hidden .scalebar, body.ui-hidden .bottom-bar, body.ui-hidden .frame-handle {
+   interactive so panning/zooming and dragging the frame still work. The
+   hide-UI button itself always stays put and clickable — it's the only way
+   back, so it can never be one of the things that fades away. */
+body.ui-hidden .status-strip, body.ui-hidden .panel, body.ui-hidden .pad-mini,
+body.ui-hidden .zoomstack, body.ui-hidden .scalebar, body.ui-hidden .bottom-bar, body.ui-hidden .frame-handle,
+body.ui-hidden .topbar > *:not(#hide-ui-btn) {
   opacity: 0; pointer-events: none; transition: opacity .15s; }
+body.ui-hidden .topbar { background: transparent; border-color: transparent; box-shadow: none; }
 body.ui-hidden .frame { box-shadow: none; }
-body:not(.ui-hidden) .topbar, body:not(.ui-hidden) .status-strip, body:not(.ui-hidden) .panel,
-body:not(.ui-hidden) .zoomstack, body:not(.ui-hidden) .scalebar, body:not(.ui-hidden) .bottom-bar {
-  transition: opacity .15s; }
+body:not(.ui-hidden) .topbar, body:not(.ui-hidden) .status-strip, body:not(.ui-hidden) .panel, body:not(.ui-hidden) .pad-mini,
+body:not(.ui-hidden) .zoomstack, body:not(.ui-hidden) .scalebar, body:not(.ui-hidden) .bottom-bar,
+body:not(.ui-hidden) .topbar > * {
+  transition: opacity .15s, background .15s, border-color .15s, box-shadow .15s; }
+#hide-ui-btn[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
 
 .toast { position: fixed; bottom: 42px; left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid rgba(255, 255, 255, .3);
   padding: 4px 4px 4px 14px; border-radius: 9px; box-shadow: var(--shadow); font-size: 12.5px; z-index: 50; max-width: calc(100vw - 32px);
@@ -329,12 +354,13 @@ body:not(.ui-hidden) .zoomstack, body:not(.ui-hidden) .scalebar, body:not(.ui-hi
    only search + create (everything else moves into the contours popover,
    via JS — see layoutTopbar in app.js) ──────────────────────────────── */
 @media (max-width: 760px) {
-  .panel { left: 8px; right: 8px; top: auto; bottom: 40px; width: auto; max-height: 55vh; }
+  .panel { left: 8px; right: 8px; top: auto; bottom: 40px; width: auto; max-height: 82vh; }
   .topbar { left: 8px; right: 8px; padding: 0 4px 0 8px; gap: 5px; }
   .wordmark { display: none; }
   .search-wrap { flex: 1 1 auto; max-width: none; }
   .status-strip { display: none; }
   .zoomstack { top: 70px; bottom: auto; right: 12px; }
+  .pad-mini { top: 70px; bottom: auto; right: 58px; }
   .scalebar { display: none; }
 }
 
