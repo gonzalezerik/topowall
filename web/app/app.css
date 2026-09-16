@@ -60,7 +60,12 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
  }
 
 /* ── Top bar: logo, search, wallpaper/contour controls, all in one row ── */
-.topbar { left: 14px; right: 14px; top: 14px; height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 10px; overflow: visible; }
+/* Its own stacking context, above the panel/zoom/scale/footer (all z-index
+   10 via .floating): position+z-index traps descendants in the ancestor's
+   stacking context regardless of their own z-index, so without this, the
+   search results and "more contour settings" popovers — both nested inside
+   the topbar — could never paint above the panel next to them. */
+.topbar { left: 14px; right: 14px; top: 14px; height: 56px; z-index: 15; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 10px; overflow: visible; }
 .brand { display: inline-flex; align-items: center; gap: 7px; flex: none; color: var(--text); font-weight: 650; font-size: 13.5px; }
 .brand:hover { text-decoration: none; }
 .wordmark { display: inline-block; }
@@ -107,7 +112,14 @@ h2 { margin: 0; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-t
 #interval-field.locked input[type="range"], #interval-field.locked input[type="number"] { opacity: .45; pointer-events: none; }
 #custom-size.popover-body { top: calc(100% + 6px); left: 0; display: flex; align-items: center; gap: 6px; width: max-content; padding: 10px 12px; }
 #custom-size input[type="number"] { width: 68px; }
-#contours-popover.popover-body { right: 0; left: auto; top: calc(100% + 8px); width: 240px; }
+#contours-popover.popover-body { right: 0; left: auto; top: calc(100% + 8px); width: 220px; }
+/* Inside the popover there's no need to mimic the topbar's cramped single
+   row — label above control, full width, like the sidebar's own fields. */
+#contours-popover .tb-field { flex-direction: column; align-items: stretch; gap: 5px; min-height: 0; }
+#contours-popover .tb-field select,
+#contours-popover .tb-field input[type="range"],
+#contours-popover .tb-field .stepper { width: 100%; }
+#contours-popover .tb-field .value-edit { justify-content: flex-end; }
 #hide-ui-btn { flex: none; }
 
 /* ── Zoom stack, scale + coordinates ─────────────────────────────────── */
@@ -362,6 +374,10 @@ body:not(.ui-hidden) .topbar > * {
   .zoomstack { top: 82px; bottom: auto; right: 12px; }
   .pad-mini { top: 82px; bottom: auto; right: 58px; }
   .scalebar { display: none; }
+  /* The pan/zoom cluster lives top-right below the bar; open the "more
+     contour settings" popover from the left instead so the two never
+     fight over the same corner. */
+  #contours-popover.popover-body { left: 8px; right: auto; width: min(220px, calc(100vw - 16px)); }
 
   /* The attribution/sources footer moves into the drawer (see layoutFooter
      in app.js) instead of sitting as its own fixed bar: there's no room for
